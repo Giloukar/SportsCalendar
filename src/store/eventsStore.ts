@@ -110,7 +110,15 @@ export const useEventsStore = create<EventsState>()(
     {
       name: 'sportcalendar-events',
       storage: createJSONStorage(() => localStorage),
-      version: 1,
+      version: 2,
+      migrate: (_persistedState: unknown, version: number) => {
+        // Passage v1 → v2 : les événements fictifs sont purgés,
+        // seuls les événements issus de providers réels sont conservés.
+        if (version < 2) {
+          return { events: [], lastSyncedAt: null };
+        }
+        return _persistedState as { events: SportEvent[]; lastSyncedAt: string | null };
+      },
       partialize: (state) => ({ events: state.events, lastSyncedAt: state.lastSyncedAt }),
     }
   )

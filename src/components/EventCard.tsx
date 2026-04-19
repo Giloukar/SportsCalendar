@@ -1,6 +1,5 @@
-import { Clock, MapPin, Tv } from 'lucide-react';
+import { Clock, MapPin, Tv, PlayCircle } from 'lucide-react';
 import { SportEvent } from '@app-types/index';
-import { SPORTS_CATALOG } from '@constants/sports';
 import { formatTime, formatRelativeDate } from '@utils/dateUtils';
 import { TierBadge } from './TierBadge';
 import { SportIcon } from './SportIcon';
@@ -13,15 +12,38 @@ interface EventCardProps {
 }
 
 /**
- * Carte événement.
- * Ruban coloré à gauche = tier. Score live affiché si disponible.
+ * Détecte la plateforme de streaming à partir d'une URL.
  */
+function detectPlatform(url: string): string {
+  const lower = url.toLowerCase();
+  if (lower.includes('twitch')) return 'Twitch';
+  if (lower.includes('youtube') || lower.includes('youtu.be')) return 'YouTube';
+  if (lower.includes('afreeca')) return 'AfreecaTV';
+  if (lower.includes('huya')) return 'Huya';
+  if (lower.includes('kick.com')) return 'Kick';
+  return 'Stream';
+}
+
+/**
+ * Retourne la première diffusion lisible parmi les broadcasts (chaîne TV
+ * ou plateforme de stream), en évitant d'afficher une URL brute.
+ */
+function firstBroadcastLabel(broadcasts?: string[]): { label: string; isStream: boolean } | null {
+  if (!broadcasts || broadcasts.length === 0) return null;
+  // Préférer une chaîne TV, sinon dériver de l'URL
+  const tv = broadcasts.find((b) => !b.startsWith('http'));
+  if (tv) return { label: tv, isStream: false };
+  const stream = broadcasts.find((b) => b.startsWith('http'));
+  if (stream) return { label: detectPlatform(stream), isStream: true };
+  return null;
+}
+
 export function EventCard({ event, onClick, showDate }: EventCardProps) {
-  const meta = SPORTS_CATALOG[event.sportId];
   const tierColor = getTierDotColor(event.tier);
   const isLive = event.status === 'live';
   const isFinished = event.status === 'finished';
   const hasScore = event.homeScore != null && event.awayScore != null;
+  const broadcast = firstBroadcastLabel(event.broadcast);
 
   return (
     <button
@@ -35,7 +57,7 @@ export function EventCard({ event, onClick, showDate }: EventCardProps) {
       />
 
       <div className="pl-4 pr-4 py-4 flex flex-col gap-2.5">
-        {/* En-tête : sport + ligue + tier */}
+        {/* En-tête */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <SportIcon sportId={event.sportId} size={18} />
@@ -119,10 +141,12 @@ export function EventCard({ event, onClick, showDate }: EventCardProps) {
               {event.venue}
             </span>
           )}
-          {event.broadcast && event.broadcast.length > 0 && (
-            <span className="flex items-center gap-1 truncate max-w-[120px]">
-              <Tv size={12} />
-              {event.broadcast[0]}
+          {broadcast && (
+            <span className={`flex items-center gap-1 truncate max-w-[140px] ${
+              broadcast.isStream ? 'text-purple-600 dark:text-purple-400 font-semibold' : ''
+            }`}>
+              {broadcast.isStream ? <PlayCircle size={12} /> : <Tv size={12} />}
+              {broadcast.label}
             </span>
           )}
         </div>

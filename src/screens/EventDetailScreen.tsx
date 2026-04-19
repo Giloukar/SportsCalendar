@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft, CalendarPlus, Share2, Star, Clock, Trophy, MapPin, Info, Play, ExternalLink, Shield,
+  ArrowLeft, CalendarPlus, Share2, Star, Clock, Trophy, MapPin, Info, Tv, ExternalLink, Shield, PlayCircle,
 } from 'lucide-react';
 import { useEventsStore } from '@store/eventsStore';
 import { usePreferencesStore } from '@store/preferencesStore';
@@ -41,6 +41,13 @@ export function EventDetailScreen() {
   const isAwayFavorite = !!event.awayTeam && favoriteTeams.includes(event.awayTeam.id);
   const hasScore = event.homeScore != null && event.awayScore != null;
 
+  /**
+   * Séparation broadcasts :
+   *  - Les URLs vont dans la section "Regarder en direct"
+   *  - Les noms de chaînes TV vont dans la section "Diffusion TV"
+   */
+  const { streams, tvChannels } = partitionBroadcasts(event.broadcast, event.externalUrls);
+
   const handleShare = async () => {
     const teams = event.homeTeam && event.awayTeam
       ? `${event.homeTeam.name} vs ${event.awayTeam.name}`
@@ -62,7 +69,7 @@ export function EventDetailScreen() {
 
   return (
     <div className="pb-8">
-      {/* Hero avec couleur du tier */}
+      {/* Hero */}
       <div
         className="relative px-4 pt-12 pb-8 text-white"
         style={{
@@ -118,7 +125,43 @@ export function EventDetailScreen() {
       </div>
 
       <div className="max-w-3xl mx-auto">
-        {/* Actions principales */}
+        {/* Grosse action "Regarder en live" si stream disponible */}
+        {streams.length > 0 && (
+          <div className="px-4 pt-4">
+            <a
+              href={streams[0].url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 w-full p-4 rounded-xl bg-gradient-to-r from-purple-600 to-purple-800 hover:from-purple-700 hover:to-purple-900 text-white font-bold shadow-md transition-all"
+            >
+              <PlayCircle size={28} />
+              <div className="flex-1 text-left">
+                <div className="text-base">Regarder en direct</div>
+                <div className="text-xs opacity-90 font-normal">{streams[0].label}</div>
+              </div>
+              <ExternalLink size={20} />
+            </a>
+            {streams.length > 1 && (
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {streams.slice(1).map((stream, i) => (
+                  <a
+                    key={i}
+                    href={stream.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 p-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                  >
+                    <PlayCircle size={16} className="text-purple-600 dark:text-purple-400" />
+                    <span className="flex-1 truncate">{stream.label}</span>
+                    <ExternalLink size={12} className="text-slate-400" />
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Actions */}
         <div className="grid grid-cols-3 gap-2 p-4">
           <ActionPill
             icon={<CalendarPlus size={20} />}
@@ -177,41 +220,19 @@ export function EventDetailScreen() {
             />
           </InfoCard>
 
-          {/* Diffusion */}
-          {event.broadcast && event.broadcast.length > 0 && (
-            <InfoCard title="Diffusion">
-              <div className="space-y-2">
-                {event.broadcast.map((channel, i) => {
-                  const isUrl = channel.startsWith('http');
-                  if (isUrl) {
-                    return (
-                      <a
-                        key={i}
-                        href={channel}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
-                      >
-                        <Play size={20} className="text-blue-600 dark:text-blue-400" />
-                        <span className="flex-1 font-semibold text-sm text-slate-900 dark:text-white">
-                          Regarder en live
-                        </span>
-                        <ExternalLink size={16} className="text-slate-400" />
-                      </a>
-                    );
-                  }
-                  return (
-                    <div
-                      key={i}
-                      className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700"
-                    >
-                      <Play size={20} className="text-blue-600 dark:text-blue-400" />
-                      <span className="flex-1 font-semibold text-sm text-slate-900 dark:text-white truncate">
-                        {channel}
-                      </span>
-                    </div>
-                  );
-                })}
+          {/* Diffusion TV */}
+          {tvChannels.length > 0 && (
+            <InfoCard title="Diffusion TV">
+              <div className="flex flex-wrap gap-2">
+                {tvChannels.map((channel, i) => (
+                  <span
+                    key={i}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-sm font-semibold text-slate-700 dark:text-slate-200"
+                  >
+                    <Tv size={14} />
+                    {channel}
+                  </span>
+                ))}
               </div>
             </InfoCard>
           )}
@@ -243,7 +264,52 @@ export function EventDetailScreen() {
   );
 }
 
-// ============= Sous-composants =============
+// ============== Utilitaires ==============
+
+/**
+ * Répartit les broadcasts en :
+ *  - streams cliquables (URLs, avec label "Twitch", "YouTube"...)
+ *  - chaînes TV (noms classiques sans URL)
+ */
+function partitionBroadcasts(
+  broadcasts: string[] | undefined,
+  externalUrls: Array<{ label: string; url: string }> | undefined
+): { streams: Array<{ label: string; url: string }>; tvChannels: string[] } {
+  const streams: Array<{ label: string; url: string }> = [];
+  const tvChannels: string[] = [];
+
+  // Priorité aux externalUrls (déjà structurés avec label/url par le provider)
+  if (externalUrls && externalUrls.length > 0) {
+    streams.push(...externalUrls);
+  }
+
+  if (broadcasts) {
+    broadcasts.forEach((b) => {
+      if (b.startsWith('http://') || b.startsWith('https://')) {
+        // Éviter les doublons avec externalUrls
+        if (!streams.some((s) => s.url === b)) {
+          streams.push({ label: detectPlatform(b), url: b });
+        }
+      } else {
+        if (!tvChannels.includes(b)) tvChannels.push(b);
+      }
+    });
+  }
+
+  return { streams, tvChannels };
+}
+
+function detectPlatform(url: string): string {
+  const lower = url.toLowerCase();
+  if (lower.includes('twitch')) return 'Twitch';
+  if (lower.includes('youtube') || lower.includes('youtu.be')) return 'YouTube';
+  if (lower.includes('afreeca')) return 'AfreecaTV';
+  if (lower.includes('huya')) return 'Huya';
+  if (lower.includes('kick.com')) return 'Kick';
+  return 'Stream';
+}
+
+// ============== Sous-composants ==============
 
 function ActionPill({
   icon, label, onClick, highlighted,
@@ -279,10 +345,6 @@ function InfoCard({ title, children }: { title: string; children: React.ReactNod
   );
 }
 
-/**
- * Ligne d'information : l'icône est passée comme un ReactNode déjà rendu,
- * ce qui évite les problèmes de typage avec les composants Lucide.
- */
 function InfoRow({
   icon, label, value, secondary,
 }: {

@@ -34,7 +34,14 @@ export type SportId =
   | 'rocketleague'
   | 'overwatch'
   | 'fifa'
-  | 'starcraft';
+  | 'starcraft'
+  | 'r6siege'
+  | 'mobilelegends'
+  | 'pubg'
+  | 'pubgmobile'
+  | 'kingofglory'
+  | 'codblackops'
+  | 'freefire';
 
 // ======================== Niveaux d'importance ========================
 

@@ -1,5 +1,5 @@
 import {
-  Trophy, Gamepad2, Target, Bike, Car, Flame, Swords, Rocket, Crosshair,
+  Trophy, Gamepad2, Target, Bike, Car, Flame, Swords, Rocket, Crosshair, Crown, Smartphone,
 } from 'lucide-react';
 import { SportId } from '@app-types/index';
 import { SPORTS_CATALOG } from '@constants/sports';
@@ -27,6 +27,7 @@ const ICON_MAP: Record<SportId, typeof Trophy> = {
   athletics: Flame,
   nfl: Trophy,
   nhl: Trophy,
+  // Esports
   lol: Swords,
   valorant: Target,
   csgo: Crosshair,
@@ -35,6 +36,13 @@ const ICON_MAP: Record<SportId, typeof Trophy> = {
   overwatch: Target,
   fifa: Gamepad2,
   starcraft: Rocket,
+  r6siege: Crosshair,
+  mobilelegends: Smartphone,
+  pubg: Crosshair,
+  pubgmobile: Smartphone,
+  kingofglory: Crown,
+  codblackops: Crosshair,
+  freefire: Flame,
 };
 
 interface SportIconProps {

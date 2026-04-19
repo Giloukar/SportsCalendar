@@ -1,18 +1,27 @@
 [build]
   command = "npm run build"
   publish = "dist"
+  functions = "netlify/functions"
 
 [build.environment]
   NODE_VERSION = "20"
 
-# Redirection pour les Single Page Applications :
-# toutes les routes renvoient index.html (côté React Router).
+[functions]
+  node_bundler = "esbuild"
+
+# Les routes React (SPA) renvoient toutes index.html,
+# SAUF les appels /.netlify/functions/* qui doivent atteindre les Functions.
+[[redirects]]
+  from = "/.netlify/functions/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
 
-# Headers de sécurité et PWA
 [[headers]]
   for = "/*"
   [headers.values]

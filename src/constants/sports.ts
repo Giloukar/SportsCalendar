@@ -9,12 +9,10 @@ export interface SportMeta {
   id: SportId;
   label: string;
   category: SportCategory;
-  icon: string; // Nom d'icône MaterialCommunityIcons
-  color: string; // Couleur représentative du sport
+  icon: string;
+  color: string;
   description: string;
-  /** Ligues majeures Tier S pour ce sport */
   tierSLeagues: string[];
-  /** Saison approximative (mois de début à mois de fin, 1-12, 0 = toute l'année) */
   season?: { start: number; end: number };
 }
 
@@ -27,7 +25,7 @@ export const SPORTS_CATALOG: Record<SportId, SportMeta> = {
     icon: 'soccer',
     color: '#2E7D32',
     description: 'Ligue 1, Premier League, Liga, Champions League',
-    tierSLeagues: ['UEFA Champions League', 'Ligue 1', 'Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'World Cup'],
+    tierSLeagues: ['UEFA Champions League', 'Ligue 1', 'Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'World Cup', 'Coupe du Monde FIFA'],
     season: { start: 8, end: 5 },
   },
   basketball: {
@@ -37,7 +35,7 @@ export const SPORTS_CATALOG: Record<SportId, SportMeta> = {
     icon: 'basketball',
     color: '#E65100',
     description: 'NBA, EuroLeague, Betclic Elite',
-    tierSLeagues: ['NBA', 'EuroLeague', 'NCAA March Madness'],
+    tierSLeagues: ['NBA', 'EuroLeague', 'NCAA Basketball', 'WNBA'],
     season: { start: 10, end: 6 },
   },
   tennis: {
@@ -47,7 +45,7 @@ export const SPORTS_CATALOG: Record<SportId, SportMeta> = {
     icon: 'tennis',
     color: '#9CCC65',
     description: 'Grand Chelems ATP/WTA, Masters 1000',
-    tierSLeagues: ['Roland Garros', 'Wimbledon', 'US Open', 'Australian Open', 'ATP Finals'],
+    tierSLeagues: ['Roland Garros', 'Wimbledon', 'US Open', 'Australian Open', 'ATP Finals', 'ATP Tour', 'WTA Tour'],
     season: { start: 1, end: 11 },
   },
   rugby: {
@@ -67,7 +65,7 @@ export const SPORTS_CATALOG: Record<SportId, SportMeta> = {
     icon: 'car-sports',
     color: '#C62828',
     description: 'Grands Prix du championnat du monde',
-    tierSLeagues: ['F1 World Championship'],
+    tierSLeagues: ['F1 World Championship', 'Formula 1'],
     season: { start: 3, end: 12 },
   },
   motogp: {
@@ -77,7 +75,7 @@ export const SPORTS_CATALOG: Record<SportId, SportMeta> = {
     icon: 'motorbike',
     color: '#D84315',
     description: 'Grands Prix MotoGP',
-    tierSLeagues: ['MotoGP World Championship'],
+    tierSLeagues: ['MotoGP World Championship', 'MotoGP'],
     season: { start: 3, end: 11 },
   },
   handball: {
@@ -86,7 +84,7 @@ export const SPORTS_CATALOG: Record<SportId, SportMeta> = {
     category: 'sport',
     icon: 'handball',
     color: '#1565C0',
-    description: 'Liqui Moly StarLigue, EHF Champions League',
+    description: 'StarLigue, EHF Champions League',
     tierSLeagues: ['EHF Champions League', 'World Championship', 'European Championship'],
     season: { start: 9, end: 6 },
   },
@@ -127,7 +125,7 @@ export const SPORTS_CATALOG: Record<SportId, SportMeta> = {
     icon: 'golf',
     color: '#558B2F',
     description: 'PGA Tour, Majors',
-    tierSLeagues: ['Masters Tournament', 'US Open', 'The Open', 'PGA Championship', 'Ryder Cup'],
+    tierSLeagues: ['Masters Tournament', 'US Open', 'The Open', 'PGA Championship', 'Ryder Cup', 'PGA Tour'],
     season: { start: 1, end: 11 },
   },
   boxing: {
@@ -147,7 +145,7 @@ export const SPORTS_CATALOG: Record<SportId, SportMeta> = {
     icon: 'karate',
     color: '#880E4F',
     description: 'UFC, Bellator',
-    tierSLeagues: ['UFC PPV', 'UFC Fight Night'],
+    tierSLeagues: ['UFC PPV', 'UFC Fight Night', 'UFC'],
     season: { start: 0, end: 0 },
   },
   cycling: {
@@ -157,7 +155,7 @@ export const SPORTS_CATALOG: Record<SportId, SportMeta> = {
     icon: 'bike',
     color: '#F9A825',
     description: 'Tour de France, Giro, Vuelta',
-    tierSLeagues: ['Tour de France', 'Giro d\'Italia', 'Vuelta a España', 'Paris-Roubaix'],
+    tierSLeagues: ['Tour de France', "Giro d'Italia", 'Vuelta a España', 'Paris-Roubaix'],
     season: { start: 3, end: 10 },
   },
   athletics: {
@@ -177,7 +175,7 @@ export const SPORTS_CATALOG: Record<SportId, SportMeta> = {
     icon: 'football',
     color: '#013369',
     description: 'National Football League',
-    tierSLeagues: ['Super Bowl', 'NFL Playoffs', 'NFL'],
+    tierSLeagues: ['Super Bowl', 'NFL Playoffs', 'NFL', 'NCAA Football'],
     season: { start: 9, end: 2 },
   },
   nhl: {
@@ -199,7 +197,7 @@ export const SPORTS_CATALOG: Record<SportId, SportMeta> = {
     icon: 'sword-cross',
     color: '#C89B3C',
     description: 'LEC, LCS, LCK, Worlds, MSI',
-    tierSLeagues: ['Worlds', 'MSI', 'LEC', 'LCK', 'LCS', 'LPL'],
+    tierSLeagues: ['Worlds', 'MSI', 'LEC', 'LCK', 'LCS', 'LPL', 'World Championship'],
     season: { start: 1, end: 11 },
   },
   valorant: {
@@ -209,7 +207,7 @@ export const SPORTS_CATALOG: Record<SportId, SportMeta> = {
     icon: 'target',
     color: '#FF4655',
     description: 'VCT, Champions, Masters',
-    tierSLeagues: ['VCT Champions', 'VCT Masters', 'VCT EMEA', 'VCT Americas', 'VCT Pacific'],
+    tierSLeagues: ['VCT Champions', 'VCT Masters', 'VCT EMEA', 'VCT Americas', 'VCT Pacific', 'Champions Tour'],
     season: { start: 1, end: 10 },
   },
   csgo: {
@@ -218,8 +216,8 @@ export const SPORTS_CATALOG: Record<SportId, SportMeta> = {
     category: 'esport',
     icon: 'pistol',
     color: '#F7941D',
-    description: 'Majors, ESL Pro League, BLAST',
-    tierSLeagues: ['CS Major', 'IEM Katowice', 'ESL Pro League', 'BLAST Premier'],
+    description: 'CS2 Majors, ESL Pro League, BLAST',
+    tierSLeagues: ['CS Major', 'CS2 Major', 'IEM Katowice', 'IEM Cologne', 'ESL Pro League', 'BLAST Premier', 'PGL Major'],
     season: { start: 0, end: 0 },
   },
   dota2: {
@@ -228,8 +226,8 @@ export const SPORTS_CATALOG: Record<SportId, SportMeta> = {
     category: 'esport',
     icon: 'shield-sword',
     color: '#A4252A',
-    description: 'The International, DPC',
-    tierSLeagues: ['The International', 'DPC Major', 'ESL One'],
+    description: 'The International, DPC, ESL One',
+    tierSLeagues: ['The International', 'DPC Major', 'ESL One', 'Riyadh Masters'],
     season: { start: 0, end: 0 },
   },
   rocketleague: {
@@ -244,7 +242,7 @@ export const SPORTS_CATALOG: Record<SportId, SportMeta> = {
   },
   overwatch: {
     id: 'overwatch',
-    label: 'Overwatch',
+    label: 'Overwatch 2',
     category: 'esport',
     icon: 'crosshairs-gps',
     color: '#F99E1A',
@@ -268,24 +266,90 @@ export const SPORTS_CATALOG: Record<SportId, SportMeta> = {
     category: 'esport',
     icon: 'rocket',
     color: '#0E6BA8',
-    description: 'ESL Pro Tour, GSL',
-    tierSLeagues: ['ESL Pro Tour', 'GSL'],
+    description: 'ESL Pro Tour, GSL, IEM',
+    tierSLeagues: ['ESL Pro Tour', 'GSL', 'IEM Katowice'],
+    season: { start: 0, end: 0 },
+  },
+  r6siege: {
+    id: 'r6siege',
+    label: 'Rainbow Six Siege',
+    category: 'esport',
+    icon: 'crosshairs-gps',
+    color: '#0C0C0C',
+    description: 'Six Invitational, Major',
+    tierSLeagues: ['Six Invitational', 'Six Major'],
+    season: { start: 0, end: 0 },
+  },
+  mobilelegends: {
+    id: 'mobilelegends',
+    label: 'Mobile Legends',
+    category: 'esport',
+    icon: 'cellphone-sound',
+    color: '#0E4DA4',
+    description: 'MPL, M-World Championship',
+    tierSLeagues: ['M World Championship', 'MPL Invitational'],
+    season: { start: 0, end: 0 },
+  },
+  pubg: {
+    id: 'pubg',
+    label: 'PUBG',
+    category: 'esport',
+    icon: 'crosshairs-gps',
+    color: '#F39C12',
+    description: 'PGC, PGS',
+    tierSLeagues: ['PGC', 'PUBG Global Championship'],
+    season: { start: 0, end: 0 },
+  },
+  pubgmobile: {
+    id: 'pubgmobile',
+    label: 'PUBG Mobile',
+    category: 'esport',
+    icon: 'cellphone',
+    color: '#E67E22',
+    description: 'PMGC, PMSL',
+    tierSLeagues: ['PMGC', 'PUBG Mobile Global Championship'],
+    season: { start: 0, end: 0 },
+  },
+  kingofglory: {
+    id: 'kingofglory',
+    label: 'Honor of Kings',
+    category: 'esport',
+    icon: 'crown',
+    color: '#D4AF37',
+    description: 'KPL, World Champion Cup',
+    tierSLeagues: ['KPL', 'World Champion Cup'],
+    season: { start: 0, end: 0 },
+  },
+  codblackops: {
+    id: 'codblackops',
+    label: 'Call of Duty',
+    category: 'esport',
+    icon: 'pistol',
+    color: '#4A4A4A',
+    description: 'CDL, Call of Duty League',
+    tierSLeagues: ['Call of Duty League Championship', 'CDL Major'],
+    season: { start: 0, end: 0 },
+  },
+  freefire: {
+    id: 'freefire',
+    label: 'Free Fire',
+    category: 'esport',
+    icon: 'fire',
+    color: '#F97316',
+    description: 'FFWS, Free Fire World Series',
+    tierSLeagues: ['Free Fire World Series', 'FFWS'],
     season: { start: 0, end: 0 },
   },
 };
 
-/**
- * Liste ordonnée des sports à afficher dans l'UI.
- * Ordre stable et prévisible.
- */
 export const SPORTS_LIST = Object.values(SPORTS_CATALOG);
 
 export const SPORTS_BY_CATEGORY: Record<SportCategory, SportMeta[]> = {
-  sport: SPORTS_LIST.filter(s => s.category === 'sport'),
-  esport: SPORTS_LIST.filter(s => s.category === 'esport'),
+  sport: SPORTS_LIST.filter((s) => s.category === 'sport'),
+  esport: SPORTS_LIST.filter((s) => s.category === 'esport'),
 };
 
-// =========== Sélection par défaut pour un nouvel utilisateur ===========
+// Sélection par défaut pour un nouvel utilisateur
 export const DEFAULT_SELECTED_SPORTS: SportId[] = [
   'football',
   'basketball',
@@ -293,9 +357,9 @@ export const DEFAULT_SELECTED_SPORTS: SportId[] = [
   'formula1',
   'lol',
   'valorant',
+  'csgo',
 ];
 
-// =========== Tiers ===========
 export const TIER_LABELS: Record<EventTier, string> = {
   S: 'Tier S – Majeur',
   A: 'Tier A – Finale',
