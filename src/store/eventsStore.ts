@@ -79,8 +79,17 @@ export const useEventsStore = create<EventsState>()(
             if (!filters.teams.some((t) => eventTeams.includes(t))) return false;
           }
           if (filters.searchQuery) {
-            const q = filters.searchQuery.toLowerCase();
-            const hay = [event.title, event.league, event.homeTeam?.name, event.awayTeam?.name, event.venue]
+            const q = filters.searchQuery.toLowerCase().trim();
+            const hay = [
+              event.title,
+              event.league,
+              event.round,
+              event.homeTeam?.name,
+              event.homeTeam?.shortName,
+              event.awayTeam?.name,
+              event.awayTeam?.shortName,
+              event.venue,
+            ]
               .filter(Boolean).join(' ').toLowerCase();
             if (!hay.includes(q)) return false;
           }

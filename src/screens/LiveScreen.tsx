@@ -1,22 +1,59 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Radio, RadioTower, RefreshCw } from 'lucide-react';
+import { RadioTower, RefreshCw } from 'lucide-react';
 import { useEventsStore } from '@store/eventsStore';
 import { EventCard } from '@components/EventCard';
 import { EmptyState } from '@components/EmptyState';
 import { syncService } from '@services/syncService';
+
+/**
+ * Écran Live : matches en cours.
+ *
+ * Auto-refresh toutes les 30 secondes pour garder les scores à jour.
+ * L'auto-refresh est pausé quand l'onglet est en arrière-plan (économie d'énergie).
+ */
+const AUTO_REFRESH_MS = 30_000;
 
 export function LiveScreen() {
   const navigate = useNavigate();
   const getLiveEvents = useEventsStore((s) => s.getLiveEvents);
   const events = useEventsStore((s) => s.events);
   const isSyncing = useEventsStore((s) => s.isSyncing);
+  const lastSyncedAt = useEventsStore((s) => s.lastSyncedAt);
+
   const [tick, setTick] = useState(0);
 
-  // Rafraîchissement automatique du statut toutes les 60s
+  // Auto-refresh : relance une synchronisation toutes les 30s quand l'écran
+  // est visible. On utilise Page Visibility API pour suspendre en background.
   useEffect(() => {
-    const interval = setInterval(() => setTick((t) => t + 1), 60_000);
-    return () => clearInterval(interval);
+    let timerId: number | undefined;
+
+    const scheduleNext = () => {
+      if (document.hidden) return;
+      timerId = window.setTimeout(async () => {
+        try {
+          await syncService.synchronize();
+        } catch (err) {
+          console.warn('[Live] Auto-refresh failed', err);
+        }
+        setTick((t) => t + 1);
+        scheduleNext();
+      }, AUTO_REFRESH_MS);
+    };
+
+    const handleVisibility = () => {
+      if (timerId) window.clearTimeout(timerId);
+      if (!document.hidden) scheduleNext();
+    };
+
+    // Premier refresh après le délai
+    scheduleNext();
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      if (timerId) window.clearTimeout(timerId);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   const liveEvents = useMemo(() => getLiveEvents(), [getLiveEvents, events, tick]);
@@ -25,13 +62,22 @@ export function LiveScreen() {
     try { await syncService.synchronize(); } catch (err) { console.warn(err); }
   };
 
+  const lastSyncLabel = lastSyncedAt
+    ? `Màj il y a ${Math.max(1, Math.floor((Date.now() - new Date(lastSyncedAt).getTime()) / 1000))}s`
+    : 'Jamais synchronisé';
+
   return (
     <div className="flex flex-col h-full">
       <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-4 flex items-center gap-3">
         <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse-live" />
-        <h1 className="text-xl font-display font-bold text-slate-900 dark:text-white flex-1">
-          En direct
-        </h1>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl font-display font-bold text-slate-900 dark:text-white">
+            En direct
+          </h1>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+            {lastSyncLabel} · Auto-refresh 30s
+          </p>
+        </div>
         <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">
           {liveEvents.length} match{liveEvents.length > 1 ? 'es' : ''}
         </span>

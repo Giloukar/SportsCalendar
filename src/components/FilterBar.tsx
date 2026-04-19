@@ -1,4 +1,4 @@
-import { Search, X } from 'lucide-react';
+import { Search, X, Check } from 'lucide-react';
 import { EventTier, SportId } from '@app-types/index';
 import { SPORTS_CATALOG, TIER_ORDER } from '@constants/sports';
 import { TIER_COLORS } from '@theme/index';
@@ -8,6 +8,7 @@ interface FilterBarProps {
   availableSports: SportId[];
   selectedSports: SportId[];
   onToggleSport: (sportId: SportId) => void;
+  onSetSports: (sports: SportId[]) => void;
   selectedTiers: EventTier[];
   onToggleTier: (tier: EventTier) => void;
   searchQuery: string;
@@ -16,18 +17,22 @@ interface FilterBarProps {
 }
 
 /**
- * Barre de filtres : recherche + chips tiers + chips sports.
+ * Barre de filtres : recherche + chips tiers + chips sports,
+ * avec boutons "Tous" / "Aucun" pour basculer rapidement.
  */
 export function FilterBar({
   availableSports,
   selectedSports,
   onToggleSport,
+  onSetSports,
   selectedTiers,
   onToggleTier,
   searchQuery,
   onSearchChange,
   showSearch = true,
 }: FilterBarProps) {
+  const allSelected = availableSports.every((id) => selectedSports.includes(id));
+
   return (
     <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 py-2 space-y-2">
       {showSearch && (
@@ -36,7 +41,7 @@ export function FilterBar({
           <input
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Rechercher une équipe, ligue ou lieu…"
+            placeholder="Rechercher équipe, ligue ou lieu…"
             className="flex-1 bg-transparent text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 outline-none"
           />
           {searchQuery && (
@@ -70,9 +75,22 @@ export function FilterBar({
         </div>
       </div>
 
-      {/* Chips sports */}
+      {/* Chips sports avec bouton "Tous / Aucun" en tête */}
       <div className="overflow-x-auto no-scrollbar">
-        <div className="flex gap-2 px-3 pb-1">
+        <div className="flex gap-2 px-3 pb-1 items-center">
+          <button
+            onClick={() => onSetSports(allSelected ? [] : availableSports)}
+            className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 text-xs font-bold transition-colors ${
+              allSelected
+                ? 'bg-slate-200 dark:bg-slate-700 border-slate-400 text-slate-700 dark:text-slate-200'
+                : 'bg-blue-600 border-blue-600 text-white'
+            }`}
+            title={allSelected ? 'Tout décocher' : 'Tout cocher'}
+          >
+            {allSelected ? <X size={14} /> : <Check size={14} />}
+            {allSelected ? 'Aucun' : 'Tous'}
+          </button>
+
           {availableSports.map((sportId) => {
             const meta = SPORTS_CATALOG[sportId];
             if (!meta) return null;
@@ -81,7 +99,7 @@ export function FilterBar({
               <button
                 key={sportId}
                 onClick={() => onToggleSport(sportId)}
-                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 text-xs font-bold transition-colors"
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 text-xs font-bold transition-colors whitespace-nowrap"
                 style={{
                   backgroundColor: isActive ? meta.color : 'transparent',
                   borderColor: meta.color,

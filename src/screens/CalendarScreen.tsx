@@ -38,7 +38,15 @@ export function CalendarScreen() {
   }, []);
 
   const filteredEvents = useMemo(
-    () => getFilteredEvents({ sports: activeSports, tiers: activeTiers, searchQuery }),
+    () => {
+      // Quand une recherche est active, on ignore les filtres de sport
+      // pour permettre à l'utilisateur de trouver une équipe même si
+      // son sport n'est pas coché.
+      if (searchQuery.trim()) {
+        return getFilteredEvents({ tiers: activeTiers, searchQuery });
+      }
+      return getFilteredEvents({ sports: activeSports, tiers: activeTiers });
+    },
     [getFilteredEvents, activeSports, activeTiers, searchQuery, events]
   );
 
@@ -64,6 +72,7 @@ export function CalendarScreen() {
         availableSports={prefSports}
         selectedSports={activeSports}
         onToggleSport={toggleSport}
+        onSetSports={setActiveSports}
         selectedTiers={activeTiers}
         onToggleTier={toggleTier}
         searchQuery={searchQuery}

@@ -148,13 +148,17 @@ function mapEspnEvent(event: EspnEvent, endpoint: EspnEndpoint): SportEvent | nu
 }
 
 async function fetchLeagueEvents(endpoint: EspnEndpoint, from: Date, to: Date): Promise<SportEvent[]> {
-  // ESPN accepte des fenêtres de 30 jours
+  // ESPN accepte des fenêtres de ~30 jours.
+  // ⚠️ Important : on décale la fenêtre suivante de +1 jour pour éviter
+  // que le dernier jour d'une fenêtre soit aussi le premier jour de la suivante,
+  // ce qui provoquait des doublons dans la version précédente.
   const windows: Array<{ start: Date; end: Date }> = [];
   let cursor = new Date(from);
   while (cursor < to) {
-    const end = new Date(Math.min(cursor.getTime() + 30 * 24 * 60 * 60 * 1000, to.getTime()));
+    const end = new Date(Math.min(cursor.getTime() + 25 * 24 * 60 * 60 * 1000, to.getTime()));
     windows.push({ start: new Date(cursor), end });
-    cursor = new Date(end.getTime() + 1);
+    // +1 jour entier pour que la prochaine fenêtre commence après la fin
+    cursor = new Date(end.getTime() + 24 * 60 * 60 * 1000);
   }
 
   const results: SportEvent[] = [];

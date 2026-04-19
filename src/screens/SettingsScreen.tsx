@@ -1,30 +1,36 @@
 import { useState } from 'react';
-import { Bell, RefreshCw, RotateCcw, Check, CheckCircle2, Sun, Moon, Monitor } from 'lucide-react';
+import {
+  Bell, RefreshCw, RotateCcw, Check, CheckCircle2, Sun, Moon, Monitor,
+  ChevronDown, CheckSquare, Square, Activity,
+} from 'lucide-react';
 import { usePreferencesStore } from '@store/preferencesStore';
-import { SPORTS_BY_CATEGORY, TIER_ORDER, TIER_LABELS, TIER_DESCRIPTIONS } from '@constants/sports';
-import { ThemeMode, EventTier } from '@app-types/index';
+import { SPORTS_BY_CATEGORY, SPORTS_CATALOG, TIER_ORDER, TIER_LABELS, TIER_DESCRIPTIONS } from '@constants/sports';
+import { ThemeMode, SportId } from '@app-types/index';
 import { TIER_COLORS } from '@theme/index';
 import { SportIcon } from '@components/SportIcon';
 import { syncService } from '@services/syncService';
 import { notificationService } from '@services/notificationService';
 
-/**
- * Écran Paramètres : sélection des sports, notifications, thème.
- * Toutes les modifications sont sauvegardées automatiquement (Zustand persist).
- */
 export function SettingsScreen() {
   const preferences = usePreferencesStore((s) => s.preferences);
   const toggleSport = usePreferencesStore((s) => s.toggleSport);
+  const setSelectedSports = usePreferencesStore((s) => s.setSelectedSports);
   const setTheme = usePreferencesStore((s) => s.setTheme);
   const updateNotifications = usePreferencesStore((s) => s.updateNotifications);
   const setMinTier = usePreferencesStore((s) => s.setMinTier);
   const resetPreferences = usePreferencesStore((s) => s.resetPreferences);
 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [syncStats, setSyncStats] = useState(syncService.getLastStats());
+
+  // Sections pliables
+  const [sportsOpen, setSportsOpen] = useState(true);
+  const [esportsOpen, setEsportsOpen] = useState(true);
+  const [diagnosticOpen, setDiagnosticOpen] = useState(false);
 
   const showMessage = (type: 'success' | 'error', text: string) => {
     setMessage({ type, text });
-    setTimeout(() => setMessage(null), 3000);
+    setTimeout(() => setMessage(null), 4000);
   };
 
   const handleTestNotification = async () => {
@@ -47,7 +53,10 @@ export function SettingsScreen() {
   const handleFullSync = async () => {
     try {
       const result = await syncService.synchronize();
-      showMessage('success', `${result.added} événements traités · Total : ${result.total}`);
+      setSyncStats(result);
+      const parts = [`${result.total} événements`];
+      if (result.duplicatesRemoved > 0) parts.push(`${result.duplicatesRemoved} doublons supprimés`);
+      showMessage('success', parts.join(' · '));
     } catch (error: any) {
       showMessage('error', error?.message ?? 'Erreur de synchronisation');
     }
@@ -58,6 +67,31 @@ export function SettingsScreen() {
       resetPreferences();
       showMessage('success', 'Préférences réinitialisées');
     }
+  };
+
+  /** Coche/décoche tous les sports d'une catégorie */
+  const toggleAllSports = (category: 'sport' | 'esport') => {
+    const categoryIds = SPORTS_BY_CATEGORY[category].map((s) => s.id);
+    const current = preferences.selectedSports;
+    const allSelected = categoryIds.every((id) => current.includes(id));
+
+    if (allSelected) {
+      // Tout décocher dans cette catégorie
+      setSelectedSports(current.filter((id) => !categoryIds.includes(id)));
+    } else {
+      // Tout cocher dans cette catégorie
+      const toAdd = categoryIds.filter((id) => !current.includes(id));
+      setSelectedSports([...current, ...toAdd]);
+    }
+  };
+
+  const isAllSelected = (category: 'sport' | 'esport') => {
+    const categoryIds = SPORTS_BY_CATEGORY[category].map((s) => s.id);
+    return categoryIds.every((id) => preferences.selectedSports.includes(id));
+  };
+
+  const countSelected = (category: 'sport' | 'esport') => {
+    return SPORTS_BY_CATEGORY[category].filter((s) => preferences.selectedSports.includes(s.id)).length;
   };
 
   return (
@@ -82,83 +116,55 @@ export function SettingsScreen() {
         </div>
       )}
 
-      <div className="px-4 space-y-6 max-w-3xl">
-        {/* Sports traditionnels */}
-        <Section title="Sports traditionnels" subtitle="Sélection affichée dans le calendrier">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
-            {SPORTS_BY_CATEGORY.sport.map((meta) => {
-              const isSelected = preferences.selectedSports.includes(meta.id);
-              return (
-                <button
-                  key={meta.id}
-                  onClick={() => toggleSport(meta.id)}
-                  className="relative flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-xl border-2 transition-all"
-                  style={{
-                    backgroundColor: isSelected ? `${meta.color}18` : 'transparent',
-                    borderColor: isSelected ? meta.color : 'var(--card-border, #e2e8f0)',
-                  }}
-                >
-                  <SportIcon sportId={meta.id} size={22} withBackground={false} />
-                  <span
-                    className={`text-xs font-semibold text-center leading-tight ${
-                      isSelected ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'
-                    }`}
-                  >
-                    {meta.label}
-                  </span>
-                  {isSelected && (
-                    <span
-                      className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full flex items-center justify-center"
-                      style={{ backgroundColor: meta.color }}
-                    >
-                      <Check size={10} className="text-white" strokeWidth={3} />
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </Section>
+      <div className="px-4 space-y-4 max-w-3xl">
+        {/* ============== Sports traditionnels ============== */}
+        <CollapsibleSection
+          title="Sports traditionnels"
+          subtitle={`${countSelected('sport')} / ${SPORTS_BY_CATEGORY.sport.length} sélectionnés`}
+          isOpen={sportsOpen}
+          onToggle={() => setSportsOpen(!sportsOpen)}
+          headerAction={
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleAllSports('sport'); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+            >
+              {isAllSelected('sport') ? <Square size={14} /> : <CheckSquare size={14} />}
+              {isAllSelected('sport') ? 'Tout décocher' : 'Tout cocher'}
+            </button>
+          }
+        >
+          <SportsGrid
+            sports={SPORTS_BY_CATEGORY.sport.map((s) => s.id)}
+            selectedSports={preferences.selectedSports}
+            onToggle={toggleSport}
+          />
+        </CollapsibleSection>
 
-        {/* Esports */}
-        <Section title="Esports" subtitle="Jeux compétitifs">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
-            {SPORTS_BY_CATEGORY.esport.map((meta) => {
-              const isSelected = preferences.selectedSports.includes(meta.id);
-              return (
-                <button
-                  key={meta.id}
-                  onClick={() => toggleSport(meta.id)}
-                  className="relative flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-xl border-2 transition-all"
-                  style={{
-                    backgroundColor: isSelected ? `${meta.color}18` : 'transparent',
-                    borderColor: isSelected ? meta.color : 'var(--card-border, #e2e8f0)',
-                  }}
-                >
-                  <SportIcon sportId={meta.id} size={22} withBackground={false} />
-                  <span
-                    className={`text-xs font-semibold text-center leading-tight ${
-                      isSelected ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'
-                    }`}
-                  >
-                    {meta.label}
-                  </span>
-                  {isSelected && (
-                    <span
-                      className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full flex items-center justify-center"
-                      style={{ backgroundColor: meta.color }}
-                    >
-                      <Check size={10} className="text-white" strokeWidth={3} />
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </Section>
+        {/* ============== Esports ============== */}
+        <CollapsibleSection
+          title="Esports"
+          subtitle={`${countSelected('esport')} / ${SPORTS_BY_CATEGORY.esport.length} sélectionnés`}
+          isOpen={esportsOpen}
+          onToggle={() => setEsportsOpen(!esportsOpen)}
+          headerAction={
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleAllSports('esport'); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-bold hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
+            >
+              {isAllSelected('esport') ? <Square size={14} /> : <CheckSquare size={14} />}
+              {isAllSelected('esport') ? 'Tout décocher' : 'Tout cocher'}
+            </button>
+          }
+        >
+          <SportsGrid
+            sports={SPORTS_BY_CATEGORY.esport.map((s) => s.id)}
+            selectedSports={preferences.selectedSports}
+            onToggle={toggleSport}
+          />
+        </CollapsibleSection>
 
-        {/* Importance minimum */}
-        <Section title="Importance minimum" subtitle="Affiche les événements à partir de ce tier">
+        {/* ============== Importance minimum ============== */}
+        <Section title="Importance minimum" subtitle="Seuil pour les notifications">
           <div className="space-y-2">
             {TIER_ORDER.map((tier) => {
               const isSelected = preferences.minTier === tier;
@@ -191,11 +197,11 @@ export function SettingsScreen() {
           </div>
         </Section>
 
-        {/* Notifications */}
+        {/* ============== Notifications ============== */}
         <Section title="Notifications">
           <ToggleRow
             title="Activer les notifications"
-            subtitle="Rappels avant les matches importants"
+            subtitle="Rappels avant les matches"
             value={preferences.notifications.enabled}
             onChange={(v) => updateNotifications({ enabled: v })}
           />
@@ -251,7 +257,7 @@ export function SettingsScreen() {
           />
         </Section>
 
-        {/* Apparence */}
+        {/* ============== Apparence ============== */}
         <Section title="Apparence">
           <div className="space-y-2">
             {(
@@ -283,14 +289,64 @@ export function SettingsScreen() {
           </div>
         </Section>
 
-        {/* Avancé */}
+        {/* ============== Diagnostic (nouveau) ============== */}
+        <CollapsibleSection
+          title="Diagnostic"
+          subtitle={syncStats ? `Dernière sync : ${syncStats.total} événements` : 'Aucune sync effectuée'}
+          isOpen={diagnosticOpen}
+          onToggle={() => setDiagnosticOpen(!diagnosticOpen)}
+          headerAction={<Activity size={18} className="text-blue-600 dark:text-blue-400" />}
+        >
+          <div className="space-y-2">
+            <ActionButton
+              icon={<RefreshCw size={18} />}
+              label="Lancer une synchronisation complète"
+              onClick={handleFullSync}
+              color="blue"
+            />
+
+            {syncStats && (
+              <div className="mt-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-2 text-xs">
+                <DiagRow label="Total événements" value={String(syncStats.total)} />
+                <DiagRow label="Doublons supprimés" value={String(syncStats.duplicatesRemoved)} />
+                <DiagRow label="Durée" value={`${(syncStats.durationMs / 1000).toFixed(1)}s`} />
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <div className="font-bold text-slate-700 dark:text-slate-300 mb-1">Par provider :</div>
+                  {Object.entries(syncStats.byProvider).map(([provider, count]) => (
+                    <DiagRow
+                      key={provider}
+                      label={provider}
+                      value={count === 0 ? '❌ 0 (vérifier config)' : `✓ ${count}`}
+                    />
+                  ))}
+                </div>
+                {syncStats.errors.length > 0 && (
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <div className="font-bold text-red-600 dark:text-red-400 mb-1">Erreurs :</div>
+                    {syncStats.errors.map((err, i) => (
+                      <div key={i} className="text-red-600 dark:text-red-400 text-[11px]">
+                        {err.provider}: {err.message}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="mt-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-xs text-blue-900 dark:text-blue-200">
+              <div className="font-bold mb-1">💡 Esports vides ?</div>
+              <ol className="list-decimal list-inside space-y-1">
+                <li>Vérifiez que la variable <code className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded">PANDASCORE_API_KEY</code> est bien configurée sur Netlify (Site configuration → Environment variables)</li>
+                <li>Redéployez ensuite (Deploys → Trigger deploy)</li>
+                <li>Cochez bien les esports souhaités ci-dessus</li>
+                <li>Relancez une sync avec le bouton ci-dessus</li>
+              </ol>
+            </div>
+          </div>
+        </CollapsibleSection>
+
+        {/* ============== Avancé ============== */}
         <Section title="Avancé">
-          <ActionButton
-            icon={<RefreshCw size={18} />}
-            label="Synchronisation complète"
-            onClick={handleFullSync}
-            color="blue"
-          />
           <ActionButton
             icon={<RotateCcw size={18} />}
             label="Réinitialiser les préférences"
@@ -300,7 +356,7 @@ export function SettingsScreen() {
         </Section>
 
         <p className="text-center text-xs text-slate-400 dark:text-slate-500 mt-8">
-          Sport Calendar · version 1.0.0
+          Sport Calendar · version 1.1.0
         </p>
       </div>
     </div>
@@ -309,6 +365,62 @@ export function SettingsScreen() {
 
 // ============= Sous-composants =============
 
+function SportsGrid({
+  sports, selectedSports, onToggle,
+}: {
+  sports: SportId[];
+  selectedSports: SportId[];
+  onToggle: (id: SportId) => void;
+}) {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+      {sports.map((sportId) => {
+        const isSelected = selectedSports.includes(sportId);
+        return (
+          <SportCard key={sportId} sportId={sportId} isSelected={isSelected} onToggle={onToggle} />
+        );
+      })}
+    </div>
+  );
+}
+
+function SportCard({
+  sportId, isSelected, onToggle,
+}: {
+  sportId: SportId;
+  isSelected: boolean;
+  onToggle: (id: SportId) => void;
+}) {
+  const meta = SPORTS_CATALOG[sportId];
+  return (
+    <button
+      onClick={() => onToggle(sportId)}
+      className="relative flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-xl border-2 transition-all"
+      style={{
+        backgroundColor: isSelected ? `${meta.color}18` : 'transparent',
+        borderColor: isSelected ? meta.color : 'var(--card-border, #e2e8f0)',
+      }}
+    >
+      <SportIcon sportId={sportId} size={22} withBackground={false} />
+      <span
+        className={`text-xs font-semibold text-center leading-tight ${
+          isSelected ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'
+        }`}
+      >
+        {meta.label}
+      </span>
+      {isSelected && (
+        <span
+          className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full flex items-center justify-center"
+          style={{ backgroundColor: meta.color }}
+        >
+          <Check size={10} className="text-white" strokeWidth={3} />
+        </span>
+      )}
+    </button>
+  );
+}
+
 function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <div>
@@ -316,6 +428,37 @@ function Section({ title, subtitle, children }: { title: string; subtitle?: stri
       {subtitle && <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">{subtitle}</p>}
       {!subtitle && <div className="mb-3" />}
       <div className="space-y-2">{children}</div>
+    </div>
+  );
+}
+
+function CollapsibleSection({
+  title, subtitle, isOpen, onToggle, headerAction, children,
+}: {
+  title: string;
+  subtitle?: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  headerAction?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center gap-3 pb-2 text-left"
+      >
+        <ChevronDown
+          size={22}
+          className={`text-slate-500 dark:text-slate-400 transition-transform ${isOpen ? '' : '-rotate-90'}`}
+        />
+        <div className="flex-1 min-w-0">
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white">{title}</h2>
+          {subtitle && <p className="text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>}
+        </div>
+        {headerAction}
+      </button>
+      {isOpen && <div className="pt-2">{children}</div>}
     </div>
   );
 }
@@ -372,5 +515,14 @@ function ActionButton({
       {icon}
       {label}
     </button>
+  );
+}
+
+function DiagRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-slate-600 dark:text-slate-400">{label}</span>
+      <span className="font-mono font-semibold text-slate-900 dark:text-white">{value}</span>
+    </div>
   );
 }
