@@ -2,6 +2,7 @@ import { addDays } from 'date-fns';
 import { SportProvider, SportId, SportEvent } from '@app-types/index';
 import { espnProvider } from './espnProvider';
 import { esportsProvider } from './esportsProvider';
+import { hltvProvider } from './hltvProvider';
 import { SPORTS_CATALOG } from '@constants/sports';
 import { useEventsStore } from '@store/eventsStore';
 import { usePreferencesStore } from '@store/preferencesStore';
@@ -22,7 +23,7 @@ export interface SyncStats {
  * Orchestre les providers pour agréger les événements RÉELS.
  */
 class SyncService {
-  private providers: SportProvider[] = [espnProvider, esportsProvider];
+  private providers: SportProvider[] = [espnProvider, esportsProvider, hltvProvider];
   private lastStats: SyncStats | null = null;
 
   getLastStats(): SyncStats | null {
@@ -51,9 +52,14 @@ class SyncService {
 
       for (const provider of this.providers) {
         try {
+          // Routage par provider :
+          //  - espn      → sports traditionnels
+          //  - pandascore → esports (tous)
+          //  - hltv      → CS2 uniquement (complément)
           const applicableSports =
             provider.id === 'pandascore' ? sportsByCategory.esport
             : provider.id === 'espn' ? sportsByCategory.sport
+            : provider.id === 'hltv' ? (requestedSports.includes('csgo') ? ['csgo' as SportId] : [])
             : requestedSports;
 
           if (applicableSports.length === 0) {
@@ -105,18 +111,81 @@ class SyncService {
   }
 
   /**
-   * Déduplication par ID d'événement.
-   * En cas de doublon, on conserve la version la plus récemment synchronisée.
+   * Déduplication par ID d'événement, puis par signature logique
+   * (équipes + date à ±1h) pour attraper les doublons cross-provider.
+   * Ex : PandaScore et HLTV renvoient tous les deux NAVI vs Vitality à 20h → on n'en garde qu'un.
+   * On privilégie PandaScore pour les streams officiels, mais on fusionne les infos.
    */
   private dedupeEvents(events: SportEvent[]): SportEvent[] {
-    const map = new Map<string, SportEvent>();
+    // Phase 1 : dédup par ID stricte
+    const byId = new Map<string, SportEvent>();
     events.forEach((event) => {
-      const existing = map.get(event.id);
+      const existing = byId.get(event.id);
       if (!existing || (event.lastSyncedAt ?? '') >= (existing.lastSyncedAt ?? '')) {
-        map.set(event.id, event);
+        byId.set(event.id, event);
       }
     });
-    return Array.from(map.values());
+
+    // Phase 2 : dédup par signature logique (équipes + ~date)
+    // Clé : sportId + teams_triés_alphabetiquement + heure_arrondie
+    const bySignature = new Map<string, SportEvent>();
+    const result: SportEvent[] = [];
+
+    for (const event of byId.values()) {
+      if (!event.homeTeam || !event.awayTeam) {
+        result.push(event);
+        continue;
+      }
+
+      const teamsKey = [event.homeTeam.name, event.awayTeam.name]
+        .map((t) => t.toLowerCase().replace(/[^a-z0-9]/g, ''))
+        .sort()
+        .join('-');
+      const hourSlot = Math.floor(new Date(event.startDate).getTime() / (60 * 60 * 1000));
+      const sig = `${event.sportId}|${teamsKey}|${hourSlot}`;
+
+      const existing = bySignature.get(sig);
+      if (!existing) {
+        bySignature.set(sig, event);
+        result.push(event);
+      } else {
+        // Fusion : on garde celui qui a le plus d'infos, on enrichit avec ce qui manque
+        const merged = this.mergeEvents(existing, event);
+        bySignature.set(sig, merged);
+        // Remplace dans result
+        const idx = result.findIndex((e) => e.id === existing.id);
+        if (idx >= 0) result[idx] = merged;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Fusionne deux événements qui représentent le même match.
+   * On garde l'ID de celui qui a le tier le plus important, puis on
+   * complète les champs manquants depuis l'autre.
+   */
+  private mergeEvents(a: SportEvent, b: SportEvent): SportEvent {
+    const tierOrder: Record<SportEvent['tier'], number> = { S: 0, A: 1, B: 2, C: 3 };
+    const primary = tierOrder[a.tier] <= tierOrder[b.tier] ? a : b;
+    const secondary = primary === a ? b : a;
+
+    return {
+      ...primary,
+      homeScore: primary.homeScore ?? secondary.homeScore,
+      awayScore: primary.awayScore ?? secondary.awayScore,
+      venue: primary.venue ?? secondary.venue,
+      round: primary.round ?? secondary.round,
+      broadcast: [...(primary.broadcast ?? []), ...(secondary.broadcast ?? [])]
+        .filter((v, i, arr) => arr.indexOf(v) === i),
+      externalUrls: [...(primary.externalUrls ?? []), ...(secondary.externalUrls ?? [])]
+        .filter((v, i, arr) => arr.findIndex((x) => x.url === v.url) === i),
+      // Statut le plus "avancé" gagne (live > finished > scheduled)
+      status: a.status === 'live' || b.status === 'live' ? 'live'
+        : a.status === 'finished' || b.status === 'finished' ? 'finished'
+        : primary.status,
+    };
   }
 
   /**

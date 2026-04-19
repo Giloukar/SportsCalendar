@@ -8,6 +8,7 @@ import { FilterBar } from '@components/FilterBar';
 import { EmptyState } from '@components/EmptyState';
 import { CalendarGrid } from '@components/CalendarGrid';
 import { syncService } from '@services/syncService';
+import { useAutoRefresh } from '@hooks/useAutoRefresh';
 import { EventTier, SportId } from '@app-types/index';
 import { formatLongDate } from '@utils/dateUtils';
 
@@ -36,6 +37,9 @@ export function CalendarScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-refresh discret (2 minutes) tant que l'écran est visible
+  useAutoRefresh(() => syncService.synchronize(), 120_000);
 
   const filteredEvents = useMemo(
     () => {

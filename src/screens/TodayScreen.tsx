@@ -8,10 +8,12 @@ import { usePreferencesStore } from '@store/preferencesStore';
 import { EventCard } from '@components/EventCard';
 import { EmptyState } from '@components/EmptyState';
 import { syncService } from '@services/syncService';
+import { useAutoRefresh } from '@hooks/useAutoRefresh';
 import { groupByDay, formatLongDate } from '@utils/dateUtils';
 
 /**
  * Écran "À venir" : 14 prochains jours, regroupés par date.
+ * Auto-refresh toutes les 2 minutes pour garder les scores à jour.
  */
 export function TodayScreen() {
   const navigate = useNavigate();
@@ -27,6 +29,9 @@ export function TodayScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-refresh silencieux toutes les 2 minutes (suspendu en background)
+  useAutoRefresh(() => syncService.synchronize(), 120_000);
 
   const sections = useMemo(() => {
     const upcoming = getUpcomingEvents(200).filter((e) => selectedSports.includes(e.sportId));
