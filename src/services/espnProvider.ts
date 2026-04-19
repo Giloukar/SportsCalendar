@@ -1,6 +1,8 @@
 import axios from 'axios';
 import { SportEvent, SportId, SportProvider, Team } from '@app-types/index';
 import { classifyEventTier } from '@utils/tierClassifier';
+import { enrichBroadcasts } from '@utils/broadcastEnrichment';
+import { sortBroadcasts } from '@utils/broadcastSort';
 
 /**
  * Provider ESPN via la Netlify Function `espn-proxy`.
@@ -127,6 +129,11 @@ function mapEspnEvent(event: EspnEvent, endpoint: EspnEndpoint): SportEvent | nu
     b.names?.forEach((n) => { if (n && !broadcastList.includes(n)) broadcastList.push(n); });
   });
 
+  // Enrichissement par défaut (ajoute Ligue 1+, beIN SPORTS, etc. si vide)
+  // puis tri FR > EN > autres.
+  const enriched = enrichBroadcasts(endpoint.displayName, event.name, broadcastList) ?? broadcastList;
+  const sorted = sortBroadcasts(enriched);
+
   return {
     id: `espn-${endpoint.sport}-${endpoint.league}-${event.id}`,
     title: event.name,
@@ -141,7 +148,7 @@ function mapEspnEvent(event: EspnEvent, endpoint: EspnEndpoint): SportEvent | nu
     homeScore: home?.score != null ? Number(home.score) : undefined,
     awayScore: away?.score != null ? Number(away.score) : undefined,
     venue: comp.venue?.fullName,
-    broadcast: broadcastList.length > 0 ? broadcastList : undefined,
+    broadcast: sorted.length > 0 ? sorted : undefined,
     round,
     lastSyncedAt: new Date().toISOString(),
   };

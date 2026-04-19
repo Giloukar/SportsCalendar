@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, CalendarPlus, Share2, Star, Clock, Trophy, MapPin, Info, Tv, ExternalLink, Shield, PlayCircle,
+  TrendingUp, BarChart3,
 } from 'lucide-react';
 import { useEventsStore } from '@store/eventsStore';
 import { usePreferencesStore } from '@store/preferencesStore';
@@ -10,6 +12,7 @@ import { TierBadge } from '@components/TierBadge';
 import { SportIcon } from '@components/SportIcon';
 import { getTierDotColor } from '@theme/index';
 import { googleCalendarService } from '@services/googleCalendarService';
+import { fetchEventStats, EventStats, TeamForm, StandingEntry } from '@services/statsService';
 
 export function EventDetailScreen() {
   const navigate = useNavigate();
@@ -19,6 +22,19 @@ export function EventDetailScreen() {
   const { favoriteTeams, favoriteLeagues } = usePreferencesStore((s) => s.preferences);
   const toggleFavoriteTeam = usePreferencesStore((s) => s.toggleFavoriteTeam);
   const toggleFavoriteLeague = usePreferencesStore((s) => s.toggleFavoriteLeague);
+
+  // Stats détaillées (chargées en asynchrone depuis ESPN summary)
+  const [stats, setStats] = useState<EventStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!event) return;
+    setStatsLoading(true);
+    fetchEventStats(event)
+      .then((s) => setStats(s))
+      .catch(() => setStats(null))
+      .finally(() => setStatsLoading(false));
+  }, [event?.id]);
 
   if (!event) {
     return (
@@ -258,6 +274,16 @@ export function EventDetailScreen() {
               </div>
             </InfoCard>
           )}
+
+          {/* Stats détaillées — visible uniquement si le provider ESPN a renvoyé des stats */}
+          {(statsLoading || stats) && (
+            <StatsSections
+              loading={statsLoading}
+              stats={stats}
+              homeTeamName={event.homeTeam?.name}
+              awayTeamName={event.awayTeam?.name}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -393,5 +419,177 @@ function TeamRow({
         fill={isFavorite ? 'currentColor' : 'none'}
       />
     </button>
+  );
+}
+
+// ============== Sections de stats détaillées ==============
+
+/**
+ * Affiche les stats détaillées d'un événement :
+ * - Classement de la ligue (standings)
+ * - Forme récente des équipes (5 derniers matches)
+ * - Leaders du match (si en cours/terminé)
+ */
+function StatsSections({
+  loading,
+  stats,
+  homeTeamName,
+  awayTeamName,
+}: {
+  loading: boolean;
+  stats: EventStats | null;
+  homeTeamName?: string;
+  awayTeamName?: string;
+}) {
+  if (loading && !stats) {
+    return (
+      <InfoCard title="Historique et stats">
+        <div className="text-xs text-slate-500 dark:text-slate-400 text-center py-2">
+          Chargement des statistiques...
+        </div>
+      </InfoCard>
+    );
+  }
+
+  if (!stats) return null;
+
+  const hasAny = stats.standings?.length || stats.homeForm || stats.awayForm || stats.leaders?.length;
+  if (!hasAny) return null;
+
+  return (
+    <>
+      {/* Forme récente */}
+      {(stats.homeForm || stats.awayForm) && (
+        <InfoCard title="Forme récente">
+          <div className="space-y-3">
+            {stats.homeForm && <TeamFormRow form={stats.homeForm} fallbackName={homeTeamName} />}
+            {stats.awayForm && <TeamFormRow form={stats.awayForm} fallbackName={awayTeamName} />}
+          </div>
+        </InfoCard>
+      )}
+
+      {/* Classement de la ligue */}
+      {stats.standings && stats.standings.length > 0 && (
+        <InfoCard title="Classement">
+          <StandingsTable
+            entries={stats.standings}
+            highlightTeams={[homeTeamName, awayTeamName].filter(Boolean) as string[]}
+          />
+        </InfoCard>
+      )}
+
+      {/* Leaders / meilleurs joueurs */}
+      {stats.leaders && stats.leaders.length > 0 && (
+        <InfoCard title="Meilleurs joueurs">
+          <div className="space-y-3">
+            {stats.leaders.map((block, i) => (
+              <div key={i}>
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                  {block.category}
+                </div>
+                <div className="space-y-0.5">
+                  {block.players.map((p, j) => (
+                    <div key={j} className="flex justify-between text-sm">
+                      <span className="text-slate-700 dark:text-slate-300 truncate pr-2">
+                        {p.name}
+                      </span>
+                      <span className="font-mono font-semibold text-slate-900 dark:text-white shrink-0">
+                        {p.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </InfoCard>
+      )}
+    </>
+  );
+}
+
+function TeamFormRow({ form, fallbackName }: { form: TeamForm; fallbackName?: string }) {
+  const name = form.teamName || fallbackName || 'Équipe';
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-1.5">
+        <TrendingUp size={14} className="text-slate-400" />
+        <span className="text-sm font-semibold text-slate-900 dark:text-white truncate flex-1">
+          {name}
+        </span>
+      </div>
+      <div className="flex gap-1.5">
+        {form.recentResults.length === 0 ? (
+          <span className="text-xs text-slate-400">Aucun résultat récent</span>
+        ) : (
+          form.recentResults.map((r, i) => (
+            <div
+              key={i}
+              className={`w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold ${
+                r.result === 'W' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                : r.result === 'L' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+              }`}
+              title={`${r.result} ${r.score}${r.opponent ? ' vs ' + r.opponent : ''}`}
+            >
+              {r.result}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StandingsTable({
+  entries,
+  highlightTeams,
+}: {
+  entries: StandingEntry[];
+  highlightTeams: string[];
+}) {
+  // On limite à 12 équipes par défaut, mais on force à inclure les 2 équipes du match
+  const keepAll = entries.length <= 12;
+  const visibleEntries = keepAll
+    ? entries
+    : entries.filter((e, i) =>
+        i < 8 || highlightTeams.some((t) => e.team.toLowerCase() === t.toLowerCase())
+      );
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+            <th className="text-left py-1.5 pl-1">#</th>
+            <th className="text-left py-1.5">Équipe</th>
+            <th className="text-center py-1.5">V</th>
+            <th className="text-center py-1.5">D</th>
+            <th className="text-center py-1.5 pr-1">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          {visibleEntries.map((e) => {
+            const isHighlighted = highlightTeams.some((t) => e.team.toLowerCase() === t.toLowerCase());
+            return (
+              <tr
+                key={e.teamId}
+                className={`border-b border-slate-100 dark:border-slate-800 ${
+                  isHighlighted ? 'bg-blue-50 dark:bg-blue-900/20 font-semibold' : ''
+                }`}
+              >
+                <td className="py-1.5 pl-1 text-slate-500 dark:text-slate-400">{e.rank}</td>
+                <td className="py-1.5 text-slate-900 dark:text-white truncate max-w-[150px]">{e.team}</td>
+                <td className="text-center py-1.5 text-slate-700 dark:text-slate-300">{e.wins}</td>
+                <td className="text-center py-1.5 text-slate-700 dark:text-slate-300">{e.losses}</td>
+                <td className="text-center py-1.5 pr-1 font-mono text-slate-700 dark:text-slate-300">
+                  {e.winPercent ? e.winPercent.toFixed(3) : '—'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }

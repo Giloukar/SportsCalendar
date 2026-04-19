@@ -56,9 +56,25 @@ export function CalendarScreen() {
 
   const dayEvents = useMemo(() => {
     const dayKey = selectedDate.toISOString().substring(0, 10);
-    return filteredEvents
-      .filter((e) => e.startDate.substring(0, 10) === dayKey)
-      .sort((a, b) => a.startDate.localeCompare(b.startDate));
+    const events = filteredEvents.filter((e) => e.startDate.substring(0, 10) === dayKey);
+
+    // Tri demandé :
+    //  1. Matches en cours (live) en premier — ordre d'heure de début
+    //  2. Matches à venir aujourd'hui — ordre chronologique
+    //  3. Matches terminés — les plus récemment terminés en haut
+    return events.sort((a, b) => {
+      const rank = (status: typeof a.status) =>
+        status === 'live' ? 0 : status === 'scheduled' ? 1 : 2;
+      const ra = rank(a.status);
+      const rb = rank(b.status);
+      if (ra !== rb) return ra - rb;
+
+      // Même catégorie : tri chronologique (décroissant pour "finished")
+      if (a.status === 'finished') {
+        return b.startDate.localeCompare(a.startDate);
+      }
+      return a.startDate.localeCompare(b.startDate);
+    });
   }, [filteredEvents, selectedDate]);
 
   const handleSync = async () => {

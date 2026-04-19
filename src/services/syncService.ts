@@ -2,7 +2,7 @@ import { addDays } from 'date-fns';
 import { SportProvider, SportId, SportEvent } from '@app-types/index';
 import { espnProvider } from './espnProvider';
 import { esportsProvider } from './esportsProvider';
-import { hltvProvider } from './hltvProvider';
+import { liquipediaProvider } from './liquipediaProvider';
 import { SPORTS_CATALOG } from '@constants/sports';
 import { useEventsStore } from '@store/eventsStore';
 import { usePreferencesStore } from '@store/preferencesStore';
@@ -23,7 +23,7 @@ export interface SyncStats {
  * Orchestre les providers pour agréger les événements RÉELS.
  */
 class SyncService {
-  private providers: SportProvider[] = [espnProvider, esportsProvider, hltvProvider];
+  private providers: SportProvider[] = [espnProvider, esportsProvider, liquipediaProvider];
   private lastStats: SyncStats | null = null;
 
   getLastStats(): SyncStats | null {
@@ -53,13 +53,13 @@ class SyncService {
       for (const provider of this.providers) {
         try {
           // Routage par provider :
-          //  - espn      → sports traditionnels
-          //  - pandascore → esports (tous)
-          //  - hltv      → CS2 uniquement (complément)
+          //  - espn       → sports traditionnels
+          //  - pandascore → esports (principal, streams officiels)
+          //  - liquipedia → esports (complément, couverture maximale)
           const applicableSports =
             provider.id === 'pandascore' ? sportsByCategory.esport
             : provider.id === 'espn' ? sportsByCategory.sport
-            : provider.id === 'hltv' ? (requestedSports.includes('csgo') ? ['csgo' as SportId] : [])
+            : provider.id === 'liquipedia' ? sportsByCategory.esport
             : requestedSports;
 
           if (applicableSports.length === 0) {
