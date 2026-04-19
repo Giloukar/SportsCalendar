@@ -1,0 +1,47 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+:root {
+  color-scheme: light dark;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900;
+}
+
+.dark body {
+  @apply bg-slate-950 text-slate-100;
+}
+
+/* Empêche le zoom du double-tap sur mobile */
+* {
+  touch-action: manipulation;
+}
+
+/* Animation Tier S : dégradé doré */
+.tier-s-gradient {
+  background: linear-gradient(135deg, #D92D20 0%, #F59E0B 100%);
+}
+
+/* Scroll doux */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Cache la scrollbar horizontale sur les chips */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

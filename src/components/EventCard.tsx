@@ -1,0 +1,132 @@
+import { Clock, MapPin, Tv } from 'lucide-react';
+import { SportEvent } from '@app-types/index';
+import { SPORTS_CATALOG } from '@constants/sports';
+import { formatTime, formatRelativeDate } from '@utils/dateUtils';
+import { TierBadge } from './TierBadge';
+import { SportIcon } from './SportIcon';
+import { getTierDotColor } from '@theme/index';
+
+interface EventCardProps {
+  event: SportEvent;
+  onClick?: (event: SportEvent) => void;
+  showDate?: boolean;
+}
+
+/**
+ * Carte événement.
+ * Ruban coloré à gauche = tier. Score live affiché si disponible.
+ */
+export function EventCard({ event, onClick, showDate }: EventCardProps) {
+  const meta = SPORTS_CATALOG[event.sportId];
+  const tierColor = getTierDotColor(event.tier);
+  const isLive = event.status === 'live';
+  const isFinished = event.status === 'finished';
+  const hasScore = event.homeScore != null && event.awayScore != null;
+
+  return (
+    <button
+      onClick={() => onClick?.(event)}
+      className="w-full text-left relative overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:shadow-md transition-all active:scale-[0.99]"
+    >
+      {/* Ruban coloré tier */}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-1"
+        style={{ backgroundColor: tierColor }}
+      />
+
+      <div className="pl-4 pr-4 py-4 flex flex-col gap-2.5">
+        {/* En-tête : sport + ligue + tier */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <SportIcon sportId={event.sportId} size={18} />
+            <div className="min-w-0">
+              <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 truncate tracking-wide">
+                {event.league}
+              </div>
+              {event.round && (
+                <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
+                  {event.round}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {isLive && (
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-500 text-white text-[10px] font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse-live" />
+                LIVE
+              </span>
+            )}
+            <TierBadge tier={event.tier} size="sm" showLabel={false} />
+          </div>
+        </div>
+
+        {/* Corps : équipes ou titre */}
+        <div>
+          {event.homeTeam && event.awayTeam ? (
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1 min-w-0 space-y-1">
+                <div className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                  {event.homeTeam.name}
+                </div>
+                <div className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                  {event.awayTeam.name}
+                </div>
+              </div>
+              {hasScore && (
+                <div
+                  className={`flex flex-col items-center justify-center min-w-[44px] px-2 py-1.5 rounded-lg border text-center ${
+                    isLive
+                      ? 'bg-red-50 dark:bg-red-900/20 border-red-400'
+                      : 'bg-slate-50 dark:bg-slate-700 border-slate-200 dark:border-slate-600'
+                  }`}
+                >
+                  <span
+                    className={`text-base font-bold ${
+                      isFinished && (event.homeScore ?? 0) > (event.awayScore ?? 0)
+                        ? 'text-slate-900 dark:text-white'
+                        : 'text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    {event.homeScore}
+                  </span>
+                  <span
+                    className={`text-base font-bold ${
+                      isFinished && (event.awayScore ?? 0) > (event.homeScore ?? 0)
+                        ? 'text-slate-900 dark:text-white'
+                        : 'text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    {event.awayScore}
+                  </span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="font-semibold text-slate-900 dark:text-slate-100">{event.title}</div>
+          )}
+        </div>
+
+        {/* Pied : heure + lieu + diffusion */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-slate-500 dark:text-slate-400">
+          <span className="flex items-center gap-1">
+            <Clock size={12} />
+            {showDate ? formatRelativeDate(event.startDate) : formatTime(event.startDate)}
+          </span>
+          {event.venue && (
+            <span className="flex items-center gap-1 truncate max-w-[180px]">
+              <MapPin size={12} />
+              {event.venue}
+            </span>
+          )}
+          {event.broadcast && event.broadcast.length > 0 && (
+            <span className="flex items-center gap-1 truncate max-w-[120px]">
+              <Tv size={12} />
+              {event.broadcast[0]}
+            </span>
+          )}
+        </div>
+      </div>
+    </button>
+  );
+}
