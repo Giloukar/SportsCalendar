@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RefreshCw, CalendarSearch, CalendarDays, Trophy } from 'lucide-react';
+import { RefreshCw, CalendarSearch, CalendarDays, Trophy, Flame, Download } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useEventsStore } from '@store/eventsStore';
@@ -10,8 +10,10 @@ import { EmptyState } from '@components/EmptyState';
 import { EventListSkeleton } from '@components/EventCardSkeleton';
 import { syncService } from '@services/syncService';
 import { useAutoRefresh } from '@hooks/useAutoRefresh';
-import { SportEvent } from '@app-types/index';
+import { SportEvent, SportId } from '@app-types/index';
 import { groupByDay, formatLongDate } from '@utils/dateUtils';
+import { SPORTS_POPULARITY_FR } from '@constants/sports';
+import { exportEventsToICS } from '@utils/icsExport';
 
 type GroupMode = 'day' | 'competition';
 
@@ -41,19 +43,37 @@ export function TodayScreen() {
 
   /**
    * Tri global : live d'abord, puis chronologique.
+   * À l'intérieur, on trie aussi par popularité du sport (football avant rugby, etc.).
    */
   const windowedEvents = useMemo(() => {
+    const sportRank = (id: SportId) => {
+      const idx = SPORTS_POPULARITY_FR.indexOf(id);
+      return idx === -1 ? 999 : idx;
+    };
     const upcoming = getUpcomingEvents(500).filter((e) => selectedSports.includes(e.sportId));
     const maxDate = addDays(new Date(), 14).toISOString();
     return upcoming
       .filter((e) => e.startDate <= maxDate)
       .sort((a, b) => {
-        // Live toujours en premier
         if (a.status === 'live' && b.status !== 'live') return -1;
         if (b.status === 'live' && a.status !== 'live') return 1;
-        return a.startDate.localeCompare(b.startDate);
+        const dateCmp = a.startDate.localeCompare(b.startDate);
+        if (dateCmp !== 0) return dateCmp;
+        return sportRank(a.sportId) - sportRank(b.sportId);
       });
   }, [events, selectedSports, getUpcomingEvents]);
+
+  /**
+   * "À ne pas manquer aujourd'hui" : top 3 matches tier S/A du jour.
+   */
+  const mustWatchToday = useMemo(() => {
+    const todayKey = new Date().toISOString().substring(0, 10);
+    return windowedEvents
+      .filter((e) => e.startDate.substring(0, 10) === todayKey)
+      .filter((e) => e.tier === 'S' || e.tier === 'A')
+      .filter((e) => e.status !== 'finished')
+      .slice(0, 3);
+  }, [windowedEvents]);
 
   /**
    * Sections par jour (par défaut).
@@ -93,6 +113,11 @@ export function TodayScreen() {
   const handleCardClick = (event: SportEvent) =>
     navigate(`/event/${encodeURIComponent(event.id)}`);
 
+  const handleExport = () => {
+    if (windowedEvents.length === 0) return;
+    exportEventsToICS(windowedEvents, `sportcal-${new Date().toISOString().substring(0, 10)}.ics`);
+  };
+
   const isInitialLoading = isSyncing && events.length === 0;
 
   return (
@@ -107,18 +132,45 @@ export function TodayScreen() {
             Vos 14 prochains jours
           </h1>
         </div>
-        <button
-          onClick={handleSync}
-          disabled={isSyncing}
-          className="shrink-0 p-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
-          title="Synchroniser"
-        >
-          <RefreshCw
-            size={20}
-            className={`text-slate-600 dark:text-slate-300 ${isSyncing ? 'animate-spin' : ''}`}
-          />
-        </button>
+        <div className="flex gap-2 shrink-0">
+          <button
+            onClick={handleExport}
+            disabled={windowedEvents.length === 0}
+            className="p-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 transition-colors"
+            title="Exporter au format .ics (Google Agenda, Apple, Outlook)"
+          >
+            <Download size={20} className="text-slate-600 dark:text-slate-300" />
+          </button>
+          <button
+            onClick={handleSync}
+            disabled={isSyncing}
+            className="p-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
+            title="Synchroniser"
+          >
+            <RefreshCw
+              size={20}
+              className={`text-slate-600 dark:text-slate-300 ${isSyncing ? 'animate-spin' : ''}`}
+            />
+          </button>
+        </div>
       </div>
+
+      {/* À ne pas manquer aujourd'hui */}
+      {mustWatchToday.length > 0 && (
+        <div className="px-4 mb-4">
+          <div className="flex items-center gap-2 mb-2 px-1">
+            <Flame size={16} className="text-orange-500" />
+            <h2 className="text-base font-bold text-slate-800 dark:text-slate-200">
+              À ne pas manquer aujourd'hui
+            </h2>
+          </div>
+          <div className="space-y-2">
+            {mustWatchToday.map((event) => (
+              <EventCard key={`mw-${event.id}`} event={event} onClick={handleCardClick} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Toggle de regroupement */}
       <div className="px-4 mb-4">

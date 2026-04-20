@@ -5,6 +5,8 @@ import { useEventsStore } from '@store/eventsStore';
 import { EventCard } from '@components/EventCard';
 import { EmptyState } from '@components/EmptyState';
 import { syncService } from '@services/syncService';
+import { SPORTS_POPULARITY_FR } from '@constants/sports';
+import { SportId } from '@app-types/index';
 
 /**
  * Écran Live : matches en cours.
@@ -56,7 +58,21 @@ export function LiveScreen() {
     };
   }, []);
 
-  const liveEvents = useMemo(() => getLiveEvents(), [getLiveEvents, events, tick]);
+  const liveEvents = useMemo(() => {
+    const sportRank = (id: SportId) => {
+      const idx = SPORTS_POPULARITY_FR.indexOf(id);
+      return idx === -1 ? 999 : idx;
+    };
+    // Tri : tier S/A d'abord, puis popularité du sport, puis heure
+    return [...getLiveEvents()].sort((a, b) => {
+      const tierRank = (t: string) => (t === 'S' ? 0 : t === 'A' ? 1 : t === 'B' ? 2 : 3);
+      const rt = tierRank(a.tier) - tierRank(b.tier);
+      if (rt !== 0) return rt;
+      const rs = sportRank(a.sportId) - sportRank(b.sportId);
+      if (rs !== 0) return rs;
+      return a.startDate.localeCompare(b.startDate);
+    });
+  }, [getLiveEvents, events, tick]);
 
   const handleSync = async () => {
     try { await syncService.synchronize(); } catch (err) { console.warn(err); }

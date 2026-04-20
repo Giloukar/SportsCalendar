@@ -345,8 +345,20 @@ export const SPORTS_CATALOG: Record<SportId, SportMeta> = {
 export const SPORTS_LIST = Object.values(SPORTS_CATALOG);
 
 export const SPORTS_BY_CATEGORY: Record<SportCategory, SportMeta[]> = {
-  sport: SPORTS_LIST.filter((s) => s.category === 'sport'),
-  esport: SPORTS_LIST.filter((s) => s.category === 'esport'),
+  sport: SPORTS_LIST
+    .filter((s) => s.category === 'sport')
+    .sort((a, b) => {
+      const ra = SPORTS_POPULARITY_FR.indexOf(a.id);
+      const rb = SPORTS_POPULARITY_FR.indexOf(b.id);
+      return (ra === -1 ? 999 : ra) - (rb === -1 ? 999 : rb);
+    }),
+  esport: SPORTS_LIST
+    .filter((s) => s.category === 'esport')
+    .sort((a, b) => {
+      const ra = SPORTS_POPULARITY_FR.indexOf(a.id);
+      const rb = SPORTS_POPULARITY_FR.indexOf(b.id);
+      return (ra === -1 ? 999 : ra) - (rb === -1 ? 999 : rb);
+    }),
 };
 
 // Sélection par défaut pour un nouvel utilisateur
@@ -375,3 +387,64 @@ export const TIER_DESCRIPTIONS: Record<EventTier, string> = {
 };
 
 export const TIER_ORDER: EventTier[] = ['S', 'A', 'B', 'C'];
+
+/**
+ * Ordre des sports selon leur popularité en France (approximatif).
+ * Basé sur l'audience TV et le nombre de pratiquants.
+ * Utilisé pour trier les listes de sports dans l'UI.
+ */
+export const SPORTS_POPULARITY_FR: SportId[] = [
+  // Sports traditionnels français (top audience)
+  'football',
+  'rugby',
+  'tennis',
+  'formula1',
+  'basketball',
+  'handball',
+  'cycling',
+  'golf',
+  'motogp',
+  'volleyball',
+  'boxing',
+  'mma',
+  'athletics',
+  'badminton',
+  // Sports américains (moins mainstream en France)
+  'nfl',
+  'nba' as SportId, // garde si ajouté plus tard
+  'baseball',
+  'nhl',
+  // Esports : par audience française
+  'lol',
+  'valorant',
+  'csgo',
+  'rocketleague',
+  'fifa',
+  'dota2',
+  'overwatch',
+  'r6siege',
+  'starcraft',
+  'codblackops',
+  'pubg',
+  'pubgmobile',
+  'mobilelegends',
+  'kingofglory',
+  'freefire',
+];
+
+/**
+ * Utilitaire : trie une liste de sportIds selon la popularité française.
+ * Les sports non listés sont placés à la fin, dans l'ordre alphabétique.
+ */
+export function sortSportsByPopularity(ids: SportId[]): SportId[] {
+  const rank = (id: SportId): number => {
+    const idx = SPORTS_POPULARITY_FR.indexOf(id);
+    return idx === -1 ? 999 : idx;
+  };
+  return [...ids].sort((a, b) => {
+    const ra = rank(a);
+    const rb = rank(b);
+    if (ra !== rb) return ra - rb;
+    return a.localeCompare(b);
+  });
+}

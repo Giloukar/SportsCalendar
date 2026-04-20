@@ -1,6 +1,6 @@
 import { Search, X, Check } from 'lucide-react';
 import { EventTier, SportId } from '@app-types/index';
-import { SPORTS_CATALOG, TIER_ORDER } from '@constants/sports';
+import { SPORTS_CATALOG, TIER_ORDER, sortSportsByPopularity } from '@constants/sports';
 import { TIER_COLORS } from '@theme/index';
 import { SportIcon } from './SportIcon';
 
@@ -32,6 +32,7 @@ export function FilterBar({
   showSearch = true,
 }: FilterBarProps) {
   const allSelected = availableSports.every((id) => selectedSports.includes(id));
+  const sortedAvailable = sortSportsByPopularity(availableSports);
 
   return (
     <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 py-2 space-y-2">
@@ -91,7 +92,7 @@ export function FilterBar({
             {allSelected ? 'Aucun' : 'Tous'}
           </button>
 
-          {availableSports.map((sportId) => {
+          {sortedAvailable.map((sportId) => {
             const meta = SPORTS_CATALOG[sportId];
             if (!meta) return null;
             const isActive = selectedSports.includes(sportId);

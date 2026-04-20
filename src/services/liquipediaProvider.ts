@@ -3,37 +3,30 @@ import { SportEvent, SportId, SportProvider } from '@app-types/index';
 import { classifyEventTier } from '@utils/tierClassifier';
 
 /**
- * Provider Liquipedia : couvre tous les grands esports grâce au scraping
- * du wiki MediaWiki public. Complète PandaScore (notamment pour les
- * tournois tier S que PandaScore peut manquer).
+ * Provider Liquipedia : unique source esport de l'application.
  *
- * Wikis Liquipedia utilisés :
- *   - counterstrike (CS2)
- *   - leagueoflegends (LoL)
- *   - dota2 (Dota 2)
- *   - valorant (Valorant)
- *   - rocketleague (RL)
- *   - overwatch (OW2)
- *   - rainbowsix (R6)
- *   - starcraft2 (SC2)
- *   - pubg (PUBG)
- *   - fifa (EA FC)
- *   - callofduty (CoD)
- *   - mobilelegends (MLBB)
- *   - pubgmobile (PUBG Mobile)
- *   - honorofkings (HoK / KoG)
- *   - freefire (Free Fire)
+ * ─── Stratégie d'appel ───
+ * Liquipedia limite action=parse à 1 req / 30s par wiki. Mon serveur
+ * Netlify applique ce rate-limit + cache 25 min, donc côté client on
+ * peut enchaîner les wikis en série SANS délai supplémentaire : si
+ * un wiki est en cache sur Netlify, il répond en 50ms.
+ *
+ * Par contre, sur le premier appel à froid d'un wiki non-caché, ça
+ * prendra ~1-3 secondes de latence réseau. On exécute donc les
+ * wikis en SÉRIE pour permettre au cache de se construire sans
+ * bloquer l'UI trop longtemps.
  */
 
 const PROXY_URL = '/.netlify/functions/liquipedia-proxy';
 
 const WIKI_MAP: Record<SportId, string | undefined> = {
-  // Traditionnels non couverts
+  // Sports traditionnels : non couverts par Liquipedia esport
   football: undefined, basketball: undefined, tennis: undefined, rugby: undefined,
   formula1: undefined, motogp: undefined, handball: undefined, badminton: undefined,
   volleyball: undefined, baseball: undefined, golf: undefined, boxing: undefined,
   mma: undefined, cycling: undefined, athletics: undefined, nfl: undefined, nhl: undefined,
-  // Esports
+
+  // Esports → slug Liquipedia
   csgo: 'counterstrike',
   lol: 'leagueoflegends',
   dota2: 'dota2',
@@ -64,6 +57,14 @@ interface LiquipediaMatch {
   wiki: string;
 }
 
+interface LiquipediaResponse {
+  matches: LiquipediaMatch[];
+  cached?: boolean;
+  stale?: boolean;
+  age?: number;
+  error?: string;
+}
+
 function detectPlatform(url: string): string {
   const lower = url.toLowerCase();
   if (lower.includes('twitch.tv')) return 'Twitch';
@@ -73,29 +74,24 @@ function detectPlatform(url: string): string {
   if (lower.includes('kick.com')) return 'Kick';
   if (lower.includes('trovo')) return 'Trovo';
   if (lower.includes('nimo')) return 'NimoTV';
+  if (lower.includes('bilibili')) return 'Bilibili';
   return 'Stream';
 }
 
-/**
- * Tente de déduire la langue du stream à partir de l'URL
- * (utile pour l'ordre FR > EN > autres).
- */
 function guessLanguage(url: string): string | undefined {
   const l = url.toLowerCase();
   if (/[_/-](fr|french|france)([_/-]|$)/.test(l)) return 'fr';
+  if (/karmine|kamto|solary|vitality|gentlemates/i.test(l)) return 'fr'; // orgas FR
   if (/[_/-](en|english|eng)([_/-]|$)/.test(l)) return 'en';
   if (/[_/-](de|ger|german|deu)([_/-]|$)/.test(l)) return 'de';
   if (/[_/-](es|spanish|espanol)([_/-]|$)/.test(l)) return 'es';
   if (/[_/-](pt|br|portuguese|brazilian)([_/-]|$)/.test(l)) return 'pt';
   if (/[_/-](ru|russian)([_/-]|$)/.test(l)) return 'ru';
-  if (/[_/-](jp|japanese)([_/-]|$)/.test(l)) return 'ja';
-  if (/[_/-](kr|korean)([_/-]|$)/.test(l)) return 'ko';
+  if (/[_/-](ko|kr|korean)([_/-]|$)/.test(l)) return 'ko';
+  if (/[_/-](jp|ja|japanese)([_/-]|$)/.test(l)) return 'ja';
   return undefined;
 }
 
-/**
- * Tri des streams : FR > EN > autres, puis alphabétique par plateforme.
- */
 function sortStreams(streams: string[]): Array<{ label: string; url: string; lang?: string }> {
   return streams
     .map((url) => ({
@@ -116,7 +112,6 @@ function sortStreams(streams: string[]): Array<{ label: string; url: string; lan
 }
 
 function mapLiquipediaMatch(match: LiquipediaMatch, sportId: SportId): SportEvent {
-  // Classification tier via notre classifier (basé sur le nom du tournoi)
   const tier = classifyEventTier({
     sportId,
     league: match.tournament,
@@ -154,23 +149,26 @@ export const liquipediaProvider: SportProvider = {
 
     if (sportIds.length === 0) return [];
 
-    // Dédup wikis (plusieurs sportIds peuvent pointer vers le même wiki)
-    const wikis = Array.from(new Set(sportIds.map((id) => WIKI_MAP[id]!).filter(Boolean)));
+    // Dédup wikis
     const sportBySlug = new Map<string, SportId>();
     sportIds.forEach((id) => {
       const w = WIKI_MAP[id];
       if (w && !sportBySlug.has(w)) sportBySlug.set(w, id);
     });
+    const wikis = Array.from(sportBySlug.keys());
 
     const results: SportEvent[] = [];
 
-    // On fait les requêtes en série pour respecter les rate-limits Liquipedia
+    // Appels en série. Grâce au cache Netlify (25 min), la plupart
+    // des wikis répondent instantanément. Seul le premier accès à froid
+    // d'un wiki prend ~2s.
     for (const wiki of wikis) {
       try {
-        const resp = await axios.get<{ matches: LiquipediaMatch[] }>(PROXY_URL, {
+        const resp = await axios.get<LiquipediaResponse>(PROXY_URL, {
           params: { wiki },
-          timeout: 15000,
+          timeout: 20000,
         });
+
         const matches = resp.data?.matches ?? [];
         const sportId = sportBySlug.get(wiki);
         if (!sportId) continue;
@@ -181,8 +179,15 @@ export const liquipediaProvider: SportProvider = {
             return d >= from && d <= to;
           })
           .forEach((m) => results.push(mapLiquipediaMatch(m, sportId)));
+
+        // Log utile pour le diagnostic
+        if (resp.data?.cached) {
+          console.info(`[Liquipedia] ${wiki}: ${matches.length} matches (cached ${resp.data.age}s ago)`);
+        } else {
+          console.info(`[Liquipedia] ${wiki}: ${matches.length} matches (fresh)`);
+        }
       } catch (error: any) {
-        console.warn(`[Liquipedia] Erreur ${wiki}`, error?.message ?? error);
+        console.warn(`[Liquipedia] ${wiki} failed:`, error?.response?.data ?? error?.message);
       }
     }
 

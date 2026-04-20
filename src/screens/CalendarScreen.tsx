@@ -11,6 +11,7 @@ import { syncService } from '@services/syncService';
 import { useAutoRefresh } from '@hooks/useAutoRefresh';
 import { EventTier, SportId } from '@app-types/index';
 import { formatLongDate } from '@utils/dateUtils';
+import { SPORTS_POPULARITY_FR } from '@constants/sports';
 
 /**
  * Écran Calendrier : vue mensuelle + liste des événements du jour sélectionné.
@@ -58,10 +59,17 @@ export function CalendarScreen() {
     const dayKey = selectedDate.toISOString().substring(0, 10);
     const events = filteredEvents.filter((e) => e.startDate.substring(0, 10) === dayKey);
 
+    const sportRank = (id: SportId) => {
+      const idx = SPORTS_POPULARITY_FR.indexOf(id);
+      return idx === -1 ? 999 : idx;
+    };
+
     // Tri demandé :
-    //  1. Matches en cours (live) en premier — ordre d'heure de début
-    //  2. Matches à venir aujourd'hui — ordre chronologique
+    //  1. Matches en cours (live) en premier — par heure
+    //  2. Matches à venir aujourd'hui — par heure (chronologique)
     //  3. Matches terminés — les plus récemment terminés en haut
+    // À l'intérieur de chaque groupe, on trie aussi par popularité du sport
+    // (football d'abord, puis rugby, etc., esports en dernier).
     return events.sort((a, b) => {
       const rank = (status: typeof a.status) =>
         status === 'live' ? 0 : status === 'scheduled' ? 1 : 2;
@@ -69,11 +77,17 @@ export function CalendarScreen() {
       const rb = rank(b.status);
       if (ra !== rb) return ra - rb;
 
-      // Même catégorie : tri chronologique (décroissant pour "finished")
+      // Même statut : d'abord par heure, puis par popularité du sport
       if (a.status === 'finished') {
-        return b.startDate.localeCompare(a.startDate);
+        // Le plus récemment terminé d'abord
+        const dateCmp = b.startDate.localeCompare(a.startDate);
+        if (dateCmp !== 0) return dateCmp;
+      } else {
+        const dateCmp = a.startDate.localeCompare(b.startDate);
+        if (dateCmp !== 0) return dateCmp;
       }
-      return a.startDate.localeCompare(b.startDate);
+      // Égalité d'heure → popularité FR
+      return sportRank(a.sportId) - sportRank(b.sportId);
     });
   }, [filteredEvents, selectedDate]);
 
