@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Bell, RefreshCw, RotateCcw, Check, CheckCircle2, Sun, Moon, Monitor,
-  ChevronDown, CheckSquare, Square, Activity,
+  ChevronDown, CheckSquare, Square, Activity, Tv2, ChevronRight,
 } from 'lucide-react';
 import { usePreferencesStore } from '@store/preferencesStore';
+import { useIptvStore } from '@store/iptvStore';
 import { SPORTS_BY_CATEGORY, SPORTS_CATALOG, TIER_ORDER, TIER_LABELS, TIER_DESCRIPTIONS } from '@constants/sports';
 import { ThemeMode, SportId } from '@app-types/index';
 import { TIER_COLORS } from '@theme/index';
@@ -289,6 +291,11 @@ export function SettingsScreen() {
           </div>
         </Section>
 
+        {/* ============== IPTV intégré ============== */}
+        <Section title="IPTV">
+          <IptvLinkButton />
+        </Section>
+
         {/* ============== Diagnostic (nouveau) ============== */}
         <CollapsibleSection
           title="Diagnostic"
@@ -524,5 +531,34 @@ function DiagRow({ label, value }: { label: string; value: string }) {
       <span className="text-slate-600 dark:text-slate-400">{label}</span>
       <span className="font-mono font-semibold text-slate-900 dark:text-white">{value}</span>
     </div>
+  );
+}
+
+// ============== Lien vers la page IPTV ==============
+
+function IptvLinkButton() {
+  const navigate = useNavigate();
+  const channelsCount = useIptvStore((s) => s.channels.length);
+
+  return (
+    <button
+      onClick={() => navigate('/settings/iptv')}
+      className="w-full flex items-center gap-3 p-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-left transition-colors"
+    >
+      <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+        <Tv2 size={20} className="text-blue-600 dark:text-blue-400" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold text-slate-900 dark:text-white text-sm">
+          Mon abonnement IPTV
+        </div>
+        <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          {channelsCount > 0
+            ? `${channelsCount} chaînes importées · regarder en un clic`
+            : 'Configurer pour regarder les matches directement'}
+        </div>
+      </div>
+      <ChevronRight size={18} className="text-slate-400 shrink-0" />
+    </button>
   );
 }

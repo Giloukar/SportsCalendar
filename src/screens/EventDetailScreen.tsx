@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, CalendarPlus, Share2, Star, Clock, Trophy, MapPin, Info, Tv, ExternalLink, Shield, PlayCircle,
-  TrendingUp, BarChart3,
+  TrendingUp, BarChart3, Play, ChevronRight,
 } from 'lucide-react';
 import { useEventsStore } from '@store/eventsStore';
 import { usePreferencesStore } from '@store/preferencesStore';
+import { useIptvStore } from '@store/iptvStore';
 import { SPORTS_CATALOG, TIER_LABELS, TIER_DESCRIPTIONS } from '@constants/sports';
 import { formatLongDate, formatTime, formatRelativeDate } from '@utils/dateUtils';
 import { TierBadge } from '@components/TierBadge';
@@ -13,6 +14,9 @@ import { SportIcon } from '@components/SportIcon';
 import { getTierDotColor } from '@theme/index';
 import { googleCalendarService } from '@services/googleCalendarService';
 import { fetchEventStats, EventStats, TeamForm, StandingEntry } from '@services/statsService';
+import { findChannelsForBroadcast } from '@services/iptvMatchingService';
+import { VideoPlayer } from '@components/VideoPlayer';
+import { IptvChannel } from '../types/iptv';
 
 export function EventDetailScreen() {
   const navigate = useNavigate();
@@ -236,21 +240,9 @@ export function EventDetailScreen() {
             />
           </InfoCard>
 
-          {/* Diffusion TV */}
+          {/* Diffusion TV avec IPTV intégré */}
           {tvChannels.length > 0 && (
-            <InfoCard title="Diffusion TV">
-              <div className="flex flex-wrap gap-2">
-                {tvChannels.map((channel, i) => (
-                  <span
-                    key={i}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-sm font-semibold text-slate-700 dark:text-slate-200"
-                  >
-                    <Tv size={14} />
-                    {channel}
-                  </span>
-                ))}
-              </div>
-            </InfoCard>
+            <BroadcastTvSection channels={tvChannels} />
           )}
 
           {/* Équipes */}
@@ -591,5 +583,138 @@ function StandingsTable({
         </tbody>
       </table>
     </div>
+  );
+}
+
+// ============== Section Diffusion TV avec IPTV intégré ==============
+
+/**
+ * Affiche les diffuseurs TV en tant que boutons cliquables.
+ * Au clic, cherche une correspondance dans les chaînes IPTV de l'utilisateur
+ * et propose soit la lecture intégrée, soit une sélection si plusieurs candidats.
+ */
+function BroadcastTvSection({ channels }: { channels: string[] }) {
+  const iptvChannels = useIptvStore((s) => s.channels);
+  const mappings = useIptvStore((s) => s.mappings);
+  const setMapping = useIptvStore((s) => s.setMapping);
+
+  const [playingChannel, setPlayingChannel] = useState<IptvChannel | null>(null);
+  const [selectingFor, setSelectingFor] = useState<string | null>(null);
+
+  const hasIptv = iptvChannels.length > 0;
+
+  const handleClick = (broadcast: string) => {
+    if (!hasIptv) {
+      alert(
+        "Configurez votre abonnement IPTV dans Réglages → IPTV pour regarder directement dans SportCal."
+      );
+      return;
+    }
+    const matches = findChannelsForBroadcast(broadcast, iptvChannels, mappings, 5);
+    if (matches.length === 0) {
+      alert(`Aucune chaîne trouvée pour "${broadcast}" dans votre playlist IPTV.`);
+      return;
+    }
+    // Si un match très fort et unique, lecture directe
+    if (matches.length === 1 || matches[0].score >= 95) {
+      setPlayingChannel(matches[0].channel);
+    } else {
+      // Plusieurs candidats : laisser l'utilisateur choisir
+      setSelectingFor(broadcast);
+    }
+  };
+
+  const candidates = selectingFor
+    ? findChannelsForBroadcast(selectingFor, iptvChannels, mappings, 8)
+    : [];
+
+  return (
+    <>
+      <InfoCard title="Diffusion TV">
+        <div className="flex flex-wrap gap-2">
+          {channels.map((channel, i) => (
+            <button
+              key={i}
+              onClick={() => handleClick(channel)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                hasIptv
+                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/50'
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
+              }`}
+            >
+              {hasIptv ? <Play size={14} /> : <Tv size={14} />}
+              {channel}
+            </button>
+          ))}
+        </div>
+        {!hasIptv && (
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
+            💡 Configurez vos chaînes IPTV dans Réglages pour les regarder en un clic.
+          </p>
+        )}
+      </InfoCard>
+
+      {/* Popup de sélection quand plusieurs correspondances */}
+      {selectingFor && candidates.length > 0 && (
+        <div
+          className="fixed inset-0 bg-black/60 z-40 flex items-end md:items-center justify-center p-4"
+          onClick={() => setSelectingFor(null)}
+        >
+          <div
+            className="bg-white dark:bg-slate-800 rounded-xl max-w-md w-full max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-slate-200 dark:border-slate-700">
+              <div className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                Choisir la chaîne
+              </div>
+              <div className="text-lg font-bold text-slate-900 dark:text-white">
+                {selectingFor}
+              </div>
+            </div>
+            <div className="p-2">
+              {candidates.map((candidate) => (
+                <button
+                  key={candidate.channel.id}
+                  onClick={() => {
+                    // Mémorise ce choix pour la prochaine fois
+                    setMapping(selectingFor, candidate.channel.id);
+                    setPlayingChannel(candidate.channel);
+                    setSelectingFor(null);
+                  }}
+                  className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-left"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                      {candidate.channel.name}
+                    </div>
+                    <div className="text-[11px] text-slate-500 truncate">
+                      {candidate.channel.group ?? '—'}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      Score : {candidate.score} · {candidate.reason}
+                    </div>
+                  </div>
+                  <ChevronRight size={16} className="text-slate-400 shrink-0" />
+                </button>
+              ))}
+            </div>
+            <div className="p-3 border-t border-slate-200 dark:border-slate-700">
+              <button
+                onClick={() => setSelectingFor(null)}
+                className="w-full py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lecteur vidéo plein écran */}
+      {playingChannel && (
+        <VideoPlayer channel={playingChannel} onClose={() => setPlayingChannel(null)} />
+      )}
+    </>
   );
 }

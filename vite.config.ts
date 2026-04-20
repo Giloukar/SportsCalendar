@@ -29,7 +29,17 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Force la mise à jour immédiate du service worker
+        clientsClaim: true,
+        skipWaiting: true,
+        // Nettoie les anciens caches des versions précédentes
+        cleanupOutdatedCaches: true,
+        // Exclut hls.js du precache (trop gros, chargé à la demande)
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+        // Les Netlify Functions ne doivent jamais être cachées
+        navigateFallbackDenylist: [/^\/\.netlify\/functions\//],
+        // Augmente la taille max (hls.js fait ~500 KB)
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/www\.thesportsdb\.com\/api\/.*/,
@@ -39,18 +49,22 @@ export default defineConfig({
               expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 },
             },
           },
-          {
-            urlPattern: /^https:\/\/api\.pandascore\.co\/.*/,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'pandascore-api',
-              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 },
-            },
-          },
         ],
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // hls.js dans son propre chunk pour lazy-loading efficace
+          'hls': ['hls.js'],
+        },
+      },
+    },
+    // Pas de warning sur la taille (on sait que hls.js est gros)
+    chunkSizeWarningLimit: 1000,
+  },
   resolve: {
     alias: {
       '@': resolve('./src'),
