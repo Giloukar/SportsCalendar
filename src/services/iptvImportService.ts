@@ -118,19 +118,75 @@ export function parseM3U(content: string): IptvChannel[] {
  * Importe la liste des chaînes depuis une URL M3U.
  *
  * Passe par le proxy Netlify pour contourner le CORS.
+ * Retourne des messages d'erreur explicites pour chaque cas typique.
  */
 export async function importFromM3U(url: string): Promise<IptvChannel[]> {
-  // On passe par le proxy même pour l'import (CORS)
+  if (!url || !/^https?:\/\//i.test(url)) {
+    throw new Error("URL invalide : l'URL doit commencer par http:// ou https://");
+  }
+
+  // Appel via proxy Netlify (contourne CORS)
   const proxyUrl = `/.netlify/functions/iptv-proxy?url=${encodeURIComponent(url)}&mode=text`;
-  const response = await fetch(proxyUrl);
+
+  let response: Response;
+  try {
+    response = await fetch(proxyUrl);
+  } catch (e: any) {
+    throw new Error(
+      `Erreur réseau : impossible de contacter le proxy. ` +
+      `Vérifiez votre connexion Internet. (${e?.message ?? e})`
+    );
+  }
+
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status} lors de la récupération de la playlist`);
+    const body = await response.text().catch(() => '');
+    if (response.status === 403) {
+      throw new Error(
+        "HTTP 403 Forbidden : votre provider IPTV refuse cette URL. " +
+        "Vérifiez que l'abonnement est actif et que l'URL est exacte."
+      );
+    }
+    if (response.status === 404) {
+      throw new Error("HTTP 404 : URL introuvable. Vérifiez l'adresse exacte.");
+    }
+    if (response.status >= 500 && response.status < 600) {
+      throw new Error(
+        `HTTP ${response.status} : serveur IPTV indisponible. Réessayez dans quelques minutes.`
+      );
+    }
+    throw new Error(
+      `HTTP ${response.status}. ${body ? body.slice(0, 150) : response.statusText}`
+    );
   }
+
   const content = await response.text();
-  if (!content.includes('#EXTM3U') && !content.includes('#EXTINF')) {
-    throw new Error("Le contenu récupéré ne ressemble pas à un fichier M3U");
+
+  if (!content || content.trim().length === 0) {
+    throw new Error("Le serveur a renvoyé une réponse vide. Vérifiez l'URL.");
   }
-  return parseM3U(content);
+
+  if (content.includes('<html') || content.includes('<!DOCTYPE')) {
+    throw new Error(
+      "L'URL pointe vers une page HTML, pas vers une playlist M3U. " +
+      "Vérifiez avec votre provider IPTV le lien exact de la playlist."
+    );
+  }
+
+  if (!content.includes('#EXTM3U') && !content.includes('#EXTINF')) {
+    throw new Error(
+      "Le contenu récupéré ne ressemble pas à une playlist M3U valide. " +
+      "Premiers caractères : " + content.substring(0, 80).replace(/\n/g, ' ')
+    );
+  }
+
+  const channels = parseM3U(content);
+  if (channels.length === 0) {
+    throw new Error(
+      "Playlist M3U valide mais aucune chaîne trouvée. Format de playlist inattendu."
+    );
+  }
+
+  return channels;
 }
 
 /**
@@ -145,29 +201,92 @@ export async function importFromXtream(
   username: string,
   password: string
 ): Promise<IptvChannel[]> {
-  // Enlève le slash final éventuel
-  const cleanServer = server.replace(/\/$/, '');
-
-  // Appel via proxy pour CORS
-  const streamsUrl = `${cleanServer}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=get_live_streams`;
-  const proxyUrl = `/.netlify/functions/iptv-proxy?url=${encodeURIComponent(streamsUrl)}&mode=json`;
-
-  const response = await fetch(proxyUrl);
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status} lors de la connexion Xtream`);
+  if (!server || !username || !password) {
+    throw new Error('Tous les champs Xtream sont obligatoires (serveur, utilisateur, mot de passe).');
   }
 
-  const data = await response.json();
+  // Ajoute http:// si absent
+  let cleanServer = server.replace(/\/$/, '');
+  if (!/^https?:\/\//i.test(cleanServer)) {
+    cleanServer = 'http://' + cleanServer;
+  }
+
+  // Étape 1 : vérifier que les credentials marchent
+  const authUrl = `${cleanServer}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+  const authProxyUrl = `/.netlify/functions/iptv-proxy?url=${encodeURIComponent(authUrl)}&mode=json`;
+
+  let authResponse: Response;
+  try {
+    authResponse = await fetch(authProxyUrl);
+  } catch (e: any) {
+    throw new Error(
+      `Erreur réseau : impossible de contacter le serveur. ` +
+      `Vérifiez l'URL du serveur et votre connexion. (${e?.message ?? e})`
+    );
+  }
+
+  if (!authResponse.ok) {
+    throw new Error(
+      `Serveur Xtream injoignable (HTTP ${authResponse.status}). ` +
+      `Vérifiez l'URL du serveur : ${cleanServer}`
+    );
+  }
+
+  let authData: any;
+  try {
+    authData = await authResponse.json();
+  } catch {
+    throw new Error(
+      `Le serveur n'a pas renvoyé du JSON. ` +
+      `L'URL "${cleanServer}" n'est probablement pas un serveur Xtream Codes.`
+    );
+  }
+
+  // Authentification Xtream : vérifier user_info.auth
+  if (!authData || !authData.user_info) {
+    throw new Error(
+      `Réponse Xtream invalide. Le serveur a répondu mais pas dans le format attendu. ` +
+      `Vérifiez que c'est bien un serveur Xtream Codes.`
+    );
+  }
+
+  if (authData.user_info.auth === 0 || authData.user_info.auth === '0') {
+    throw new Error(
+      `Identifiants incorrects. Le serveur a refusé la connexion. ` +
+      `Vérifiez votre nom d'utilisateur et mot de passe.`
+    );
+  }
+
+  // Étape 2 : récupérer les streams
+  const streamsUrl = `${authUrl}&action=get_live_streams`;
+  const streamsProxyUrl = `/.netlify/functions/iptv-proxy?url=${encodeURIComponent(streamsUrl)}&mode=json`;
+
+  const streamsResponse = await fetch(streamsProxyUrl);
+  if (!streamsResponse.ok) {
+    throw new Error(`Erreur HTTP ${streamsResponse.status} lors de la récupération des chaînes`);
+  }
+
+  const data = await streamsResponse.json();
   if (!Array.isArray(data)) {
-    throw new Error("Réponse Xtream invalide (vérifiez les identifiants)");
+    throw new Error(
+      "Le serveur n'a pas renvoyé de liste de chaînes. " +
+      "Votre abonnement est-il actif ?"
+    );
   }
 
-  // Récupère aussi les catégories pour avoir les groupes
-  const catUrl = `${cleanServer}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=get_live_categories`;
+  if (data.length === 0) {
+    throw new Error(
+      "Le serveur a répondu mais aucune chaîne disponible. " +
+      "Votre abonnement est-il actif et inclut-il des chaînes live ?"
+    );
+  }
+
+  // Étape 3 : récupérer les catégories pour les groupes
+  const catUrl = `${authUrl}&action=get_live_categories`;
   const catProxyUrl = `/.netlify/functions/iptv-proxy?url=${encodeURIComponent(catUrl)}&mode=json`;
   const catResponse = await fetch(catProxyUrl);
   const categories: Array<{ category_id: string; category_name: string }> =
-    catResponse.ok ? await catResponse.json() : [];
+    catResponse.ok ? await catResponse.json().catch(() => []) : [];
   const catMap = new Map(categories.map((c) => [c.category_id, c.category_name]));
 
   return data.map((item: any) => {

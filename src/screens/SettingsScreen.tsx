@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Bell, RefreshCw, RotateCcw, Check, CheckCircle2, Sun, Moon, Monitor,
-  ChevronDown, CheckSquare, Square, Activity, Tv2, ChevronRight,
+  ChevronDown, CheckSquare, Square, Activity, Tv2, ChevronRight, Bug,
 } from 'lucide-react';
 import { usePreferencesStore } from '@store/preferencesStore';
 import { useIptvStore } from '@store/iptvStore';
@@ -24,6 +24,7 @@ export function SettingsScreen() {
 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [syncStats, setSyncStats] = useState(syncService.getLastStats());
+  const [liquipediaDebug, setLiquipediaDebug] = useState<any>(null);
 
   // Sections pliables
   const [sportsOpen, setSportsOpen] = useState(true);
@@ -68,6 +69,32 @@ export function SettingsScreen() {
     if (confirm('Réinitialiser toutes les préférences ?')) {
       resetPreferences();
       showMessage('success', 'Préférences réinitialisées');
+    }
+  };
+
+  const handleLiquipediaDebug = async () => {
+    // Tente lol comme wiki de test (le plus gros volume)
+    const wiki = 'leagueoflegends';
+    try {
+      showMessage('success', `Test Liquipedia sur ${wiki}...`);
+      const res = await fetch(
+        `/.netlify/functions/liquipedia-proxy?wiki=${wiki}&debug=1&force=1`
+      );
+      const data = await res.json();
+      setLiquipediaDebug({
+        wiki,
+        ...data.debug,
+        error: data.error,
+        matchesFound: data.matches?.length ?? data.debug?.matchesFound ?? 0,
+      });
+      if (data.error) {
+        showMessage('error', `Liquipedia : ${data.error}`);
+      } else {
+        showMessage('success', `Liquipedia OK : ${data.matches?.length ?? 0} matches`);
+      }
+    } catch (e: any) {
+      setLiquipediaDebug({ wiki, error: e?.message ?? String(e) });
+      showMessage('error', `Erreur réseau : ${e?.message ?? e}`);
     }
   };
 
@@ -340,13 +367,51 @@ export function SettingsScreen() {
               </div>
             )}
 
+            <ActionButton
+              icon={<Bug size={18} />}
+              label="Diagnostiquer Liquipedia"
+              onClick={handleLiquipediaDebug}
+              color="blue"
+            />
+
+            {liquipediaDebug && (
+              <div className="mt-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-1 text-xs">
+                <div className="font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Debug Liquipedia — {liquipediaDebug.wiki}
+                </div>
+                <DiagRow label="Statut HTTP" value={String(liquipediaDebug.status ?? '?')} />
+                <DiagRow label="Taille HTML" value={`${liquipediaDebug.htmlLength ?? 0} car.`} />
+                <DiagRow label="Matches parsés" value={String(liquipediaDebug.matchesFound ?? 0)} />
+                {liquipediaDebug.apiError && (
+                  <div className="text-red-600 text-[11px] mt-1">
+                    Erreur API : {JSON.stringify(liquipediaDebug.apiError)}
+                  </div>
+                )}
+                {liquipediaDebug.error && (
+                  <div className="text-red-600 text-[11px] mt-1">
+                    Erreur : {liquipediaDebug.error}
+                  </div>
+                )}
+                {liquipediaDebug.htmlPreview && (
+                  <details className="mt-1">
+                    <summary className="cursor-pointer text-[10px] text-slate-500">
+                      Aperçu HTML (300 premiers car.)
+                    </summary>
+                    <div className="mt-1 p-2 bg-white dark:bg-slate-900 rounded font-mono text-[10px] text-slate-600 dark:text-slate-400 break-all">
+                      {liquipediaDebug.htmlPreview}
+                    </div>
+                  </details>
+                )}
+              </div>
+            )}
+
             <div className="mt-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-xs text-blue-900 dark:text-blue-200">
-              <div className="font-bold mb-1">💡 Esports vides ?</div>
+              <div className="font-bold mb-1">💡 Esports vides ou 0 matches ?</div>
               <ol className="list-decimal list-inside space-y-1">
-                <li>Vérifiez que la variable <code className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded">PANDASCORE_API_KEY</code> est bien configurée sur Netlify (Site configuration → Environment variables)</li>
-                <li>Redéployez ensuite (Deploys → Trigger deploy)</li>
-                <li>Cochez bien les esports souhaités ci-dessus</li>
-                <li>Relancez une sync avec le bouton ci-dessus</li>
+                <li>Cochez bien les esports souhaités ci-dessus (LoL, CS:GO, Valorant, etc.)</li>
+                <li>Cliquez sur <strong>Diagnostiquer Liquipedia</strong> pour voir si le site répond</li>
+                <li>Relancez une sync après</li>
+                <li>Si 403/429 persistent, Liquipedia peut être temporairement indisponible</li>
               </ol>
             </div>
           </div>
