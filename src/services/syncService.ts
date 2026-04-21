@@ -1,7 +1,7 @@
 import { addDays } from 'date-fns';
 import { SportProvider, SportId, SportEvent } from '@app-types/index';
 import { espnProvider } from './espnProvider';
-import { liquipediaProvider } from './liquipediaProvider';
+import { pandascoreProvider } from './pandascoreProvider';
 import { SPORTS_CATALOG } from '@constants/sports';
 import { useEventsStore } from '@store/eventsStore';
 import { usePreferencesStore } from '@store/preferencesStore';
@@ -22,7 +22,7 @@ export interface SyncStats {
  * Orchestre les providers pour agréger les événements RÉELS.
  */
 class SyncService {
-  private providers: SportProvider[] = [espnProvider, liquipediaProvider];
+  private providers: SportProvider[] = [espnProvider, pandascoreProvider];
   private lastStats: SyncStats | null = null;
 
   getLastStats(): SyncStats | null {
@@ -52,11 +52,11 @@ class SyncService {
       for (const provider of this.providers) {
         try {
           // Routage :
-          //  - espn       → sports traditionnels
-          //  - liquipedia → esports (source unique)
+          //  - espn        → sports traditionnels
+          //  - pandascore  → esports (source unique)
           const applicableSports =
             provider.id === 'espn' ? sportsByCategory.sport
-            : provider.id === 'liquipedia' ? sportsByCategory.esport
+            : provider.id === 'pandascore' ? sportsByCategory.esport
             : requestedSports;
 
           if (applicableSports.length === 0) {

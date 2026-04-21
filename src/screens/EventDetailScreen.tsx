@@ -40,6 +40,14 @@ export function EventDetailScreen() {
       .finally(() => setStatsLoading(false));
   }, [event?.id]);
 
+  // Vibration légère à l'ouverture d'un match en direct (feedback mobile)
+  useEffect(() => {
+    if (!event || event.status !== 'live') return;
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try { navigator.vibrate([30, 50, 30]); } catch {}
+    }
+  }, [event?.id, event?.status]);
+
   if (!event) {
     return (
       <div className="p-8 text-center">

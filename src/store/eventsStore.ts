@@ -45,7 +45,13 @@ export const useEventsStore = create<EventsState>()(
               map.set(e.id, e);
             }
           });
-          return { events: Array.from(map.values()) };
+          // Auto-cleanup : on retire les événements finis depuis > 7 jours
+          // (évite que localStorage gonfle indéfiniment)
+          const cutoffIso = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+          const all = Array.from(map.values()).filter(
+            (e) => e.status !== 'finished' || e.startDate >= cutoffIso
+          );
+          return { events: all };
         }),
 
       upsertEvent: (event) =>
@@ -67,7 +73,24 @@ export const useEventsStore = create<EventsState>()(
 
       getFilteredEvents: (filters) => {
         const { events } = get();
+        // Récupère la pref hideOldFinished (défaut true)
+        let hideOld = true;
+        try {
+          const prefsRaw = localStorage.getItem('sportcal-preferences');
+          if (prefsRaw) {
+            const parsed = JSON.parse(prefsRaw);
+            const v = parsed?.state?.preferences?.hideOldFinished;
+            if (v === false) hideOld = false;
+          }
+        } catch {}
+        const cutoff = Date.now() - 24 * 60 * 60 * 1000; // 24h ago
+
         return events.filter((event) => {
+          // Masque les matches finis depuis >24h
+          if (hideOld && event.status === 'finished') {
+            const ts = new Date(event.startDate).getTime();
+            if (ts < cutoff) return false;
+          }
           if (filters.sports?.length && !filters.sports.includes(event.sportId)) return false;
           if (filters.tiers?.length && !filters.tiers.includes(event.tier)) return false;
           if (filters.leagues?.length && !filters.leagues.includes(event.league)) return false;

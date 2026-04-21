@@ -45,9 +45,20 @@ export function EventCard({ event, onClick, showDate }: EventCardProps) {
   const hasScore = event.homeScore != null && event.awayScore != null;
   const broadcast = firstBroadcastLabel(event.broadcast);
 
+  const handleTap = () => {
+    // Vibration haptique discrète (uniquement si le navigateur supporte)
+    // Vibration plus longue pour les matches live pour souligner l'urgence.
+    if ('vibrate' in navigator) {
+      try {
+        navigator.vibrate(event.status === 'live' ? [30, 30, 30] : 15);
+      } catch {}
+    }
+    onClick?.(event);
+  };
+
   return (
     <button
-      onClick={() => onClick?.(event)}
+      onClick={handleTap}
       className="w-full text-left relative overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:shadow-md transition-all active:scale-[0.99]"
     >
       {/* Ruban coloré tier */}

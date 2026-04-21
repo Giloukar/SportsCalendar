@@ -15,6 +15,7 @@ import { notificationService } from '@services/notificationService';
 
 export function SettingsScreen() {
   const preferences = usePreferencesStore((s) => s.preferences);
+  const setPreferences = usePreferencesStore((s) => s.setPreferences);
   const toggleSport = usePreferencesStore((s) => s.toggleSport);
   const setSelectedSports = usePreferencesStore((s) => s.setSelectedSports);
   const setTheme = usePreferencesStore((s) => s.setTheme);
@@ -24,7 +25,7 @@ export function SettingsScreen() {
 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [syncStats, setSyncStats] = useState(syncService.getLastStats());
-  const [liquipediaDebug, setLiquipediaDebug] = useState<any>(null);
+  const [pandaDebug, setPandaDebug] = useState<any>(null);
 
   // Sections pliables
   const [sportsOpen, setSportsOpen] = useState(true);
@@ -72,28 +73,29 @@ export function SettingsScreen() {
     }
   };
 
-  const handleLiquipediaDebug = async () => {
-    // Tente lol comme wiki de test (le plus gros volume)
-    const wiki = 'leagueoflegends';
+  const handlePandaScoreDebug = async () => {
+    const game = 'lol';
     try {
-      showMessage('success', `Test Liquipedia sur ${wiki}...`);
+      showMessage('success', `Test PandaScore sur ${game}...`);
       const res = await fetch(
-        `/.netlify/functions/liquipedia-proxy?wiki=${wiki}&debug=1&force=1`
+        `/.netlify/functions/pandascore-proxy?game=${game}&type=upcoming&force=1`
       );
       const data = await res.json();
-      setLiquipediaDebug({
-        wiki,
-        ...data.debug,
+      setPandaDebug({
+        wiki: `PandaScore (${game})`,
+        status: res.status,
         error: data.error,
-        matchesFound: data.matches?.length ?? data.debug?.matchesFound ?? 0,
+        help: data.help,
+        matchesFound: data.matches?.length ?? 0,
+        rateLimitRemaining: data.rateLimitRemaining,
       });
       if (data.error) {
-        showMessage('error', `Liquipedia : ${data.error}`);
+        showMessage('error', `PandaScore : ${data.error}`);
       } else {
-        showMessage('success', `Liquipedia OK : ${data.matches?.length ?? 0} matches`);
+        showMessage('success', `PandaScore OK : ${data.matches?.length ?? 0} matches LoL`);
       }
     } catch (e: any) {
-      setLiquipediaDebug({ wiki, error: e?.message ?? String(e) });
+      setPandaDebug({ wiki: 'PandaScore', error: e?.message ?? String(e) });
       showMessage('error', `Erreur réseau : ${e?.message ?? e}`);
     }
   };
@@ -318,6 +320,16 @@ export function SettingsScreen() {
           </div>
         </Section>
 
+        {/* ============== Affichage ============== */}
+        <Section title="Affichage">
+          <ToggleRow
+            title="Masquer les matches terminés depuis plus de 24h"
+            subtitle="Allège le calendrier en cachant les vieux résultats"
+            value={preferences.hideOldFinished !== false}
+            onChange={(v) => setPreferences({ hideOldFinished: v })}
+          />
+        </Section>
+
         {/* ============== IPTV intégré ============== */}
         <Section title="IPTV">
           <IptvLinkButton />
@@ -369,50 +381,50 @@ export function SettingsScreen() {
 
             <ActionButton
               icon={<Bug size={18} />}
-              label="Diagnostiquer Liquipedia"
-              onClick={handleLiquipediaDebug}
+              label="Tester PandaScore"
+              onClick={handlePandaScoreDebug}
               color="blue"
             />
 
-            {liquipediaDebug && (
+            {pandaDebug && (
               <div className="mt-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-1 text-xs">
                 <div className="font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Debug Liquipedia — {liquipediaDebug.wiki}
+                  Test — {pandaDebug.wiki}
                 </div>
-                <DiagRow label="Statut HTTP" value={String(liquipediaDebug.status ?? '?')} />
-                <DiagRow label="Taille HTML" value={`${liquipediaDebug.htmlLength ?? 0} car.`} />
-                <DiagRow label="Matches parsés" value={String(liquipediaDebug.matchesFound ?? 0)} />
-                {liquipediaDebug.apiError && (
-                  <div className="text-red-600 text-[11px] mt-1">
-                    Erreur API : {JSON.stringify(liquipediaDebug.apiError)}
+                <DiagRow label="Statut HTTP" value={String(pandaDebug.status ?? '?')} />
+                <DiagRow label="Matches trouvés" value={String(pandaDebug.matchesFound ?? 0)} />
+                {pandaDebug.rateLimitRemaining != null && (
+                  <DiagRow
+                    label="Requêtes restantes"
+                    value={`${pandaDebug.rateLimitRemaining} / 1000`}
+                  />
+                )}
+                {pandaDebug.error && (
+                  <div className="text-red-600 text-[11px] mt-1 break-words">
+                    Erreur : {pandaDebug.error}
                   </div>
                 )}
-                {liquipediaDebug.error && (
-                  <div className="text-red-600 text-[11px] mt-1">
-                    Erreur : {liquipediaDebug.error}
+                {pandaDebug.help && (
+                  <div className="text-blue-600 text-[11px] mt-1">
+                    💡 {pandaDebug.help}
                   </div>
-                )}
-                {liquipediaDebug.htmlPreview && (
-                  <details className="mt-1">
-                    <summary className="cursor-pointer text-[10px] text-slate-500">
-                      Aperçu HTML (300 premiers car.)
-                    </summary>
-                    <div className="mt-1 p-2 bg-white dark:bg-slate-900 rounded font-mono text-[10px] text-slate-600 dark:text-slate-400 break-all">
-                      {liquipediaDebug.htmlPreview}
-                    </div>
-                  </details>
                 )}
               </div>
             )}
 
             <div className="mt-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-xs text-blue-900 dark:text-blue-200">
-              <div className="font-bold mb-1">💡 Esports vides ou 0 matches ?</div>
+              <div className="font-bold mb-1">💡 Esports vides ? Configurer PandaScore (2 min)</div>
               <ol className="list-decimal list-inside space-y-1">
-                <li>Cochez bien les esports souhaités ci-dessus (LoL, CS:GO, Valorant, etc.)</li>
-                <li>Cliquez sur <strong>Diagnostiquer Liquipedia</strong> pour voir si le site répond</li>
-                <li>Relancez une sync après</li>
-                <li>Si 403/429 persistent, Liquipedia peut être temporairement indisponible</li>
+                <li>Créez un compte gratuit sur <strong>pandascore.co</strong></li>
+                <li>Récupérez votre clé API dans Dashboard → API Access</li>
+                <li>Sur Netlify : Site configuration → Environment variables → ajoutez <code className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded">PANDASCORE_API_KEY</code></li>
+                <li>Redéployez (Deploys → Trigger deploy)</li>
+                <li>Cliquez sur <strong>Tester PandaScore</strong> pour valider</li>
+                <li>Cochez les esports souhaités puis relancez une sync</li>
               </ol>
+              <div className="mt-2 text-[10px] opacity-80">
+                Plan gratuit : 1000 requêtes/heure, largement suffisant.
+              </div>
             </div>
           </div>
         </CollapsibleSection>

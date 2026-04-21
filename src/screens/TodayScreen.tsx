@@ -52,8 +52,13 @@ export function TodayScreen() {
     };
     const upcoming = getUpcomingEvents(500).filter((e) => selectedSports.includes(e.sportId));
     const maxDate = addDays(new Date(), 14).toISOString();
+    // Masque les matches terminés depuis plus de 24h : ils ne sont plus
+    // pertinents dans l'écran Aujourd'hui. Les résultats récents restent
+    // visibles 24h pour que l'utilisateur puisse voir le score.
+    const cutoff24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
     return upcoming
       .filter((e) => e.startDate <= maxDate)
+      .filter((e) => e.status !== 'finished' || e.startDate >= cutoff24h)
       .sort((a, b) => {
         if (a.status === 'live' && b.status !== 'live') return -1;
         if (b.status === 'live' && a.status !== 'live') return 1;

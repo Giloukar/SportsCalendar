@@ -142,6 +142,8 @@ export interface UserPreferences {
   theme: ThemeMode;
   /** Langue de l'interface */
   language: 'fr' | 'en';
+  /** Masquer automatiquement les matches terminés depuis plus de 24h */
+  hideOldFinished?: boolean;
   /** Fuseau horaire automatique ou manuel */
   timezone?: string;
   /** Dernière synchronisation globale */

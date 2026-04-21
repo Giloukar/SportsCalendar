@@ -26,6 +26,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   },
   theme: 'auto',
   language: 'fr',
+  hideOldFinished: true,
 };
 
 interface PreferencesState {

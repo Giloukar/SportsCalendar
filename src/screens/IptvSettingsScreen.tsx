@@ -70,6 +70,53 @@ export function IptvSettingsScreen() {
     }
   };
 
+  /**
+   * Test de connexion diagnostic : fait un appel au proxy sans rien parser,
+   * juste pour savoir ce que le serveur IPTV renvoie vraiment.
+   */
+  const handleTestConnection = async () => {
+    setImporting(true);
+    setImportError(null);
+
+    try {
+      let testUrl: string;
+      if (sourceType === 'm3u') {
+        if (!m3uUrl.trim()) throw new Error('Entrez une URL M3U');
+        testUrl = m3uUrl.trim();
+      } else {
+        if (!xtreamServer.trim() || !xtreamUsername.trim() || !xtreamPassword) {
+          throw new Error('Remplissez tous les champs Xtream');
+        }
+        let srv = xtreamServer.trim().replace(/\/$/, '');
+        if (!/^https?:\/\//i.test(srv)) srv = 'http://' + srv;
+        testUrl = `${srv}/player_api.php?username=${encodeURIComponent(xtreamUsername.trim())}&password=${encodeURIComponent(xtreamPassword)}`;
+      }
+
+      const proxyUrl = `/.netlify/functions/iptv-proxy?url=${encodeURIComponent(testUrl)}&mode=text`;
+      const res = await fetch(proxyUrl);
+      const preview = (await res.text()).substring(0, 200);
+
+      const report = [
+        `Statut HTTP : ${res.status} ${res.statusText}`,
+        `Taille réponse : ${preview.length} car. (premiers octets affichés)`,
+        `Aperçu : ${preview.slice(0, 150) || '(vide)'}`,
+      ].join('\n');
+
+      setImportError(report);
+      if (res.ok) {
+        showFeedback('success', `Connexion OK (HTTP ${res.status})`);
+      } else {
+        showFeedback('error', `Erreur HTTP ${res.status}`);
+      }
+    } catch (e: any) {
+      const msg = e?.message ?? String(e);
+      setImportError(`Erreur réseau : ${msg}`);
+      showFeedback('error', msg);
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const handleClearAll = () => {
     if (
       confirm(
@@ -214,6 +261,14 @@ export function IptvSettingsScreen() {
           )}
         </button>
 
+        <button
+          onClick={handleTestConnection}
+          disabled={isImporting}
+          className="mt-2 w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50 text-slate-700 dark:text-slate-300 font-semibold text-xs transition-colors"
+        >
+          🔬 Tester la connexion (diagnostic)
+        </button>
+
         {source?.lastImportedAt && (
           <p className="text-xs text-slate-500 mt-2 text-center">
             Dernier import : {new Date(source.lastImportedAt).toLocaleString('fr-FR')}
@@ -221,7 +276,7 @@ export function IptvSettingsScreen() {
         )}
 
         {lastImportError && (
-          <div className="mt-2 p-2.5 rounded-lg bg-red-50 dark:bg-red-900/20 text-xs text-red-800 dark:text-red-300">
+          <div className="mt-2 p-2.5 rounded-lg bg-red-50 dark:bg-red-900/20 text-xs text-red-800 dark:text-red-300 whitespace-pre-wrap font-mono break-words">
             {lastImportError}
           </div>
         )}

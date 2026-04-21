@@ -22,7 +22,7 @@ export function CalendarScreen() {
   const events = useEventsStore((s) => s.events);
   const isSyncing = useEventsStore((s) => s.isSyncing);
   const getFilteredEvents = useEventsStore((s) => s.getFilteredEvents);
-  const { selectedSports: prefSports } = usePreferencesStore((s) => s.preferences);
+  const { selectedSports: prefSports, hideOldFinished } = usePreferencesStore((s) => s.preferences);
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -47,12 +47,20 @@ export function CalendarScreen() {
       // Quand une recherche est active, on ignore les filtres de sport
       // pour permettre à l'utilisateur de trouver une équipe même si
       // son sport n'est pas coché.
-      if (searchQuery.trim()) {
-        return getFilteredEvents({ tiers: activeTiers, searchQuery });
+      const base = searchQuery.trim()
+        ? getFilteredEvents({ tiers: activeTiers, searchQuery })
+        : getFilteredEvents({ sports: activeSports, tiers: activeTiers });
+
+      // Masquage auto des vieux matches (si préférence activée)
+      if (hideOldFinished) {
+        const cutoff = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+        return base.filter(
+          (e) => e.status !== 'finished' || e.startDate >= cutoff
+        );
       }
-      return getFilteredEvents({ sports: activeSports, tiers: activeTiers });
+      return base;
     },
-    [getFilteredEvents, activeSports, activeTiers, searchQuery, events]
+    [getFilteredEvents, activeSports, activeTiers, searchQuery, events, hideOldFinished]
   );
 
   const dayEvents = useMemo(() => {
